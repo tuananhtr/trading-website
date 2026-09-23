@@ -1,5 +1,6 @@
 """
-database.py - SQLite persistence layer for stock OHLCV data and watchlist.
+database.py - Database layer supporting both SQLite (local dev) and PostgreSQL (production).
+Set DATABASE_URL environment variable for PostgreSQL. Falls back to SQLite if not set.
 """
 import os
 from datetime import date, datetime
@@ -13,10 +14,22 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 # ---------------------------------------------------------------------------
-# Engine & session
+# Engine — PostgreSQL in production (DATABASE_URL set), SQLite locally
 # ---------------------------------------------------------------------------
-DB_PATH = os.path.join(os.path.dirname(__file__), "stock_data.db")
-engine = create_engine(f"sqlite:///{DB_PATH}", echo=False, future=True)
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
+if DATABASE_URL:
+    # Railway / Render provide postgres:// — SQLAlchemy needs postgresql://
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    engine = create_engine(DATABASE_URL, echo=False, future=True)
+    print(f"[DB] Using PostgreSQL")
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "stock_data.db")
+    engine = create_engine(f"sqlite:///{DB_PATH}", echo=False, future=True,
+                           connect_args={"check_same_thread": False})
+    print(f"[DB] Using SQLite: {DB_PATH}")
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
@@ -30,14 +43,14 @@ class Base(DeclarativeBase):
 class StockPrice(Base):
     __tablename__ = "stock_prices"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    ticker = Column(String(20), nullable=False)
-    date = Column(Date, nullable=False)
-    open = Column(Float)
-    high = Column(Float)
-    low = Column(Float)
-    close = Column(Float)
-    volume = Column(Float)
+    id      = Column(Integer, primary_key=True, autoincrement=True)
+    ticker  = Column(String(20), nullable=False)
+    date    = Column(Date, nullable=False)
+    open    = Column(Float)
+    high    = Column(Float)
+    low     = Column(Float)
+    close   = Column(Float)
+    volume  = Column(Float)
 
     __table_args__ = (
         UniqueConstraint("ticker", "date", name="uq_ticker_date"),
@@ -48,18 +61,9 @@ class StockPrice(Base):
 class WatchlistItem(Base):
     __tablename__ = "watchlist"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    ticker = Column(String(20), nullable=False, unique=True)
+    id       = Column(Integer, primary_key=True, autoincrement=True)
+    ticker   = Column(String(20), nullable=False, unique=True)
     added_at = Column(DateTime, default=datetime.utcnow)
-
-
-class FetchLog(Base):
-    """Tracks when a ticker was last fully refreshed from yfinance."""
-    __tablename__ = "fetch_log"
-
-    ticker = Column(String(20), primary_key=True)
-    last_fetched = Column(DateTime, default=datetime.utcnow)
-    last_date = Column(Date, nullable=True)
 
 
 def init_db():
@@ -71,37 +75,43 @@ def init_db():
 # ---------------------------------------------------------------------------
 
 def upsert_ohlcv(df: pd.DataFrame, ticker: str) -> int:
-    """
-    Insert or replace OHLCV rows for *ticker*.
-    df must have columns: date, open, high, low, close, volume (date as date objects).
-    Returns number of rows upserted.
-    """
+    """Insert or replace OHLCV rows for *ticker*. Returns number of rows upserted."""
     if df.empty:
         return 0
 
-    rows = df.to_dict(orient="records")
+    rows = df.reset_index() if df.index.name == "date" else df
+    rows = rows.to_dict(orient="records")
+
+    # Detect whether we're using PostgreSQL or SQLite for upsert syntax
+    is_postgres = DATABASE_URL != ""
 
     with SessionLocal() as session:
-        # SQLite upsert via INSERT OR REPLACE
-        session.execute(
-            text(
-                "INSERT OR REPLACE INTO stock_prices "
-                "(ticker, date, open, high, low, close, volume) VALUES "
-                "(:ticker, :date, :open, :high, :low, :close, :volume)"
-            ),
-            [
-                {
-                    "ticker": ticker,
-                    "date": r["date"],
-                    "open": r["open"],
-                    "high": r["high"],
-                    "low": r["low"],
-                    "close": r["close"],
-                    "volume": r["volume"],
-                }
-                for r in rows
-            ],
-        )
+        if is_postgres:
+            # PostgreSQL upsert
+            session.execute(
+                text(
+                    "INSERT INTO stock_prices (ticker, date, open, high, low, close, volume) "
+                    "VALUES (:ticker, :date, :open, :high, :low, :close, :volume) "
+                    "ON CONFLICT (ticker, date) DO UPDATE SET "
+                    "open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low, "
+                    "close=EXCLUDED.close, volume=EXCLUDED.volume"
+                ),
+                [{"ticker": ticker, "date": r.get("date"), "open": r.get("open"),
+                  "high": r.get("high"), "low": r.get("low"),
+                  "close": r.get("close"), "volume": r.get("volume")} for r in rows],
+            )
+        else:
+            # SQLite upsert
+            session.execute(
+                text(
+                    "INSERT OR REPLACE INTO stock_prices "
+                    "(ticker, date, open, high, low, close, volume) VALUES "
+                    "(:ticker, :date, :open, :high, :low, :close, :volume)"
+                ),
+                [{"ticker": ticker, "date": r.get("date"), "open": r.get("open"),
+                  "high": r.get("high"), "low": r.get("low"),
+                  "close": r.get("close"), "volume": r.get("volume")} for r in rows],
+            )
         session.commit()
 
     return len(rows)
@@ -122,17 +132,9 @@ def get_ohlcv(ticker: str, start: Optional[date] = None, end: Optional[date] = N
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
 
     df = pd.DataFrame(
-        [
-            {
-                "date": r.date,
-                "open": r.open,
-                "high": r.high,
-                "low": r.low,
-                "close": r.close,
-                "volume": r.volume,
-            }
-            for r in rows
-        ]
+        [{"date": r.date, "open": r.open, "high": r.high,
+          "low": r.low, "close": r.close, "volume": r.volume}
+         for r in rows]
     )
     df["date"] = pd.to_datetime(df["date"])
     df = df.set_index("date")
