@@ -44,7 +44,11 @@ app.add_middleware(
 )
 
 # Serve frontend static files
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+# Frontend dir: try ../frontend (standard), fall back to ./frontend
+_base = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(_base, "..", "frontend")
+if not os.path.isdir(FRONTEND_DIR):
+    FRONTEND_DIR = os.path.join(_base, "frontend")
 
 # ---------------------------------------------------------------------------
 # Utility
