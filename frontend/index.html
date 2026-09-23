@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VN Trading Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TOP BAR — Watchlist + Search
+  ════════════════════════════════════════════════════════════════ -->
+  <header class="top-bar">
+    <span class="watchlist-label">📋 Watchlist</span>
+    <div class="watchlist-pills" id="watchlist-pills">
+      <!-- Pills injected by app.js -->
+    </div>
+
+    <div class="search-row">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input
+          type="text"
+          class="search-input"
+          id="search-input"
+          placeholder="e.g. HPG, VNM…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="search-dropdown" id="search-dropdown"></div>
+      </div>
+      <button class="btn-add" id="btn-add">＋ Add</button>
+      <button class="btn-add" id="btn-refresh" title="Re-fetch data from yfinance" style="background:transparent;color:var(--text-muted);border-color:var(--border);">⟳ Refresh</button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       MAIN CONTENT
+  ════════════════════════════════════════════════════════════════ -->
+  <main class="main-content">
+
+    <!-- Stock Header -->
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div class="stock-header">
+        <span class="stock-ticker" id="stock-ticker">—</span>
+        <span class="stock-price" id="stock-price"></span>
+        <span class="stock-change" id="stock-change"></span>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="signal-badge" id="signal-badge">
+          <span>0</span> buy signals
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);">
+          Strategy: MA200 ↓ &amp; RSI&lt;30 &amp; MACD cross ↑
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart Controls -->
+    <div class="chart-controls">
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#10b981"></span> Price</div>
+        <div class="legend-item"><span class="legend-dot" style="background:rgba(148,163,184,0.7)"></span> MA200</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span> Buy Signal</div>
+      </div>
+      <div class="period-btns">
+        <button class="period-btn" data-period="1M">1M</button>
+        <button class="period-btn" data-period="3M">3M</button>
+        <button class="period-btn" data-period="6M">6M</button>
+        <button class="period-btn" data-period="1Y">1Y</button>
+        <button class="period-btn active" data-period="2Y">2Y</button>
+        <button class="period-btn" data-period="5Y">5Y</button>
+        <button class="period-btn" data-period="ALL">ALL</button>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-wrapper">
+      <div id="price-chart"></div>
+      <div id="macd-chart"></div>
+      <div class="chart-loading" id="chart-loading">
+        <div class="spinner"></div>
+        <span>Loading data…</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════
+         BACKTEST SECTION
+    ═════════════════════════════════════════════════════════════ -->
+    <section>
+      <div class="section-header">
+        <div class="section-title" id="backtest-title">Buy Signals &amp; Backtest — Last 2Y</div>
+        <div class="cut-loss-btns">
+          <span>✂ Cut Loss:</span>
+          <button class="cl-btn none-btn active" data-cutloss="none">None</button>
+          <button class="cl-btn" data-cutloss="7">7%</button>
+          <button class="cl-btn" data-cutloss="10">10%</button>
+          <button class="cl-btn" data-cutloss="15">15%</button>
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="summary-cards" id="summary-cards">
+        <!-- Rendered by app.js -->
+        <div class="empty-state" style="grid-column:1/-1;">
+          <div class="icon">📊</div>
+          Select a stock to view backtest results
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <div class="tab active" data-panel="panel-trades">Trade Details</div>
+        <div class="tab" data-panel="panel-info">Strategy Info</div>
+      </div>
+
+      <!-- Tab: Trade Details -->
+      <div class="tab-panel active" id="panel-trades">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Signal Date</th>
+                <th>Stock</th>
+                <th>Indicator</th>
+                <th>Entry Price</th>
+                <th>Exit Price</th>
+                <th>Exit Status</th>
+                <th>Days</th>
+                <th>P&amp;L (Gross)</th>
+                <th>P&amp;L (Net)</th>
+              </tr>
+            </thead>
+            <tbody id="signal-table-body">
+              <tr>
+                <td colspan="9" class="empty-state">Select a stock from your watchlist to see buy signals.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab: Strategy Info -->
+      <div class="tab-panel" id="panel-info">
+        <div class="table-wrap" style="padding: 20px 24px; line-height: 2;">
+          <div style="color:var(--text-dim)">
+            <h3 style="color:var(--text-primary);margin-bottom:12px;font-size:14px;">📐 Strategy: Long-term Reversal</h3>
+            <div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:12px;">
+              <div style="color:var(--text-muted);font-weight:600;">Condition 1 — Trend</div>
+              <div>Close price <strong style="color:var(--amber)">below MA(200)</strong> — stock is in a long-term downtrend / deep dip</div>
+              <div style="color:var(--text-muted);font-weight:600;">Condition 2 — Momentum</div>
+              <div><strong style="color:var(--amber)">RSI(14) &lt; 30</strong> — stock is in oversold territory</div>
+              <div style="color:var(--text-muted);font-weight:600;">Condition 3 — Confirmation</div>
+              <div>MACD(12,26,9) line <strong style="color:var(--green)">crosses above signal line</strong> — momentum turning bullish</div>
+              <div style="color:var(--text-muted);font-weight:600;">Entry</div>
+              <div>Open price of the <strong>next bar</strong> after signal bar</div>
+              <div style="color:var(--text-muted);font-weight:600;">Exit</div>
+              <div>Current date (open position marked-to-market) or cut-loss trigger</div>
+              <div style="color:var(--text-muted);font-weight:600;">Fee Model</div>
+              <div>Buy: 0.15% | Sell: 0.15% + 0.10% tax = <strong style="color:var(--red)">~0.40% round-trip</strong></div>
+              <div style="color:var(--text-muted);font-weight:600;">Data Source</div>
+              <div>yfinance (.VN suffix) — stored locally in SQLite from 2010</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- TradingView Lightweight Charts v4 -->
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+
+<!-- App scripts -->
+<script src="js/api.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
