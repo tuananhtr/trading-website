@@ -2,7 +2,8 @@
  * api.js — REST API wrapper for the trading dashboard backend.
  */
 
-const BASE = "http://localhost:8000";
+// Empty string = relative URL → works on both localhost and Railway (same origin)
+const BASE = "";
 
 async function apiFetch(path, opts = {}) {
   const res = await fetch(BASE + path, opts);
