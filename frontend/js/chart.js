@@ -175,12 +175,17 @@ function updateCharts(data) {
     );
   }
 
-  // Volume bars colored by direction (green = up day, red = down day)
+  // Volume bars — normalize to 0-1 so outlier spikes don't crush everything else
   if (volumes && volumes.length) {
+    const maxVol = Math.max(...volumes.map((v) => v.value || 0)) || 1;
     const colored = volumes.map((v, i) => {
       const c = candles && candles[i];
       const isUp = c ? c.close >= c.open : true;
-      return { ...v, color: isUp ? "rgba(16,185,129,0.5)" : "rgba(239,68,68,0.4)" };
+      return {
+        time:  v.time,
+        value: v.value / maxVol,          // normalize 0-1
+        color: isUp ? "rgba(16,185,129,0.55)" : "rgba(239,68,68,0.45)",
+      };
     });
     volumeSeries.setData(colored);
   }
