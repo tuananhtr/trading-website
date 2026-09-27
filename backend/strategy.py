@@ -59,13 +59,15 @@ def _macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9):
 
 # ─── Main compute function ────────────────────────────────────────────────────
 
-def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
+def compute_indicators(df: pd.DataFrame, strategy: int = 1) -> pd.DataFrame:
     """
     Add technical indicator columns to *df*.
 
     Input:  DataFrame with columns [open, high, low, close, volume], DatetimeIndex.
     Output: Same df with extra columns:
             ma200, rsi, macd, macd_signal, macd_hist, buy_signal
+    strategy: 1 = MA200 + RSI<30 + MACD cross (oversold reversal)
+              2 = MACD cross + MACD > 0 (momentum breakout)
     """
     if df.empty or len(df) < MA_PERIOD:
         df = df.copy()
@@ -83,20 +85,22 @@ def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["ma200"]                          = _sma(close, MA_PERIOD)
     df["rsi"]                            = _rsi(close, RSI_PERIOD)
     df["macd"], df["macd_signal"], df["macd_hist"] = _macd(close, MACD_FAST, MACD_SLOW, MACD_SIGNAL)
-    df["buy_signal"]                     = _detect_buy_signals(df)
+
+    if strategy == 2:
+        df["buy_signal"] = _detect_buy_signals_s2(df)
+    else:
+        df["buy_signal"] = _detect_buy_signals_s1(df)
 
     return df
 
 
-def _detect_buy_signals(df: pd.DataFrame) -> pd.Series:
+def _detect_buy_signals_s1(df: pd.DataFrame) -> pd.Series:
     """
-    Returns a boolean Series: True on bars where all 3 conditions are met.
-
+    Strategy 1 — Oversold Reversal
     Conditions:
-      1. close < ma200  (price below long-term trend)
-      2. RSI(14) was < 30 within the last 5 bars  (recently oversold)
-         — RSI recovers faster than MACD confirms, so we use a lookback window
-      3. MACD(12,26,9) bullish crossover on this bar (momentum confirmation)
+      1. close < MA200  (price below long-term trend)
+      2. RSI(14) < 30 within last 5 bars  (recently oversold)
+      3. MACD(12,26,9) crosses above signal line  (momentum turns up)
     """
     close     = df["close"]
     ma200     = df["ma200"]
@@ -107,18 +111,31 @@ def _detect_buy_signals(df: pd.DataFrame) -> pd.Series:
     prev_macd = macd.shift(1)
     prev_sig  = macd_sig.shift(1)
 
-    # Condition 1: price below MA200
-    cond_ma = close < ma200
-
-    # Condition 2: RSI was oversold in last 5 bars (rolling min)
-    rsi_min_5 = rsi.rolling(window=5, min_periods=1).min()
-    cond_rsi = rsi_min_5 < 30
-
-    # Condition 3: MACD bullish crossover today
+    cond_ma         = close < ma200
+    rsi_min_5       = rsi.rolling(window=5, min_periods=1).min()
+    cond_rsi        = rsi_min_5 < 30
     cond_macd_cross = (macd > macd_sig) & (prev_macd <= prev_sig)
 
-    signal = cond_ma & cond_rsi & cond_macd_cross
-    return signal.fillna(False)
+    return (cond_ma & cond_rsi & cond_macd_cross).fillna(False)
+
+
+def _detect_buy_signals_s2(df: pd.DataFrame) -> pd.Series:
+    """
+    Strategy 2 — MACD Momentum Breakout
+    Conditions:
+      1. MACD(12,26,9) crosses above signal line  (momentum turns up)
+      2. MACD > 0  (momentum is in positive territory — trend is bullish)
+    """
+    macd     = df["macd"]
+    macd_sig = df["macd_signal"]
+
+    prev_macd = macd.shift(1)
+    prev_sig  = macd_sig.shift(1)
+
+    cond_macd_cross    = (macd > macd_sig) & (prev_macd <= prev_sig)
+    cond_macd_positive = macd > 0
+
+    return (cond_macd_cross & cond_macd_positive).fillna(False)
 
 
 def get_signals(df: pd.DataFrame) -> pd.DataFrame:

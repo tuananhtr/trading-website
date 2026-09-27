@@ -16,22 +16,22 @@ async function apiFetch(path, opts = {}) {
 
 const API = {
   /** Get OHLCV + indicators for a ticker */
-  getStockData(ticker, period = "2Y") {
-    return apiFetch(`/api/stocks/${ticker}/data?period=${period}`);
+  getStockData(ticker, period = "2Y", strategy = 1) {
+    return apiFetch(`/api/stocks/${ticker}/data?period=${period}&strategy=${strategy}`);
   },
 
   /** Get all buy signals */
-  getSignals(ticker) {
-    return apiFetch(`/api/stocks/${ticker}/signals`);
+  getSignals(ticker, strategy = 1) {
+    return apiFetch(`/api/stocks/${ticker}/signals?strategy=${strategy}`);
   },
 
   /** Run backtest, optionally filtered to a time period */
-  getBacktest(ticker, cutLoss = null, period = "ALL") {
+  getBacktest(ticker, cutLoss = null, period = "ALL", strategy = 1) {
     const params = new URLSearchParams();
     if (cutLoss != null) params.set("cut_loss", cutLoss);
     if (period)          params.set("period", period);
-    const qs = params.toString() ? "?" + params.toString() : "";
-    return apiFetch(`/api/stocks/${ticker}/backtest${qs}`);
+    params.set("strategy", strategy);
+    return apiFetch(`/api/stocks/${ticker}/backtest?${params.toString()}`);
   },
 
   /** Force re-fetch from yfinance */

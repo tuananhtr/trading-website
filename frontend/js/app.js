@@ -8,6 +8,7 @@ const state = {
   activeTicker: null,
   watchlist: [],
   period: "2Y",
+  strategy: 1,       // 1 = Oversold Reversal, 2 = MACD Momentum
   cutLoss: null,
   loading: false,
   backtestData: null,
@@ -162,7 +163,7 @@ async function loadStockData() {
 
   try {
     // Load chart data
-    const data = await API.getStockData(ticker, state.period);
+    const data = await API.getStockData(ticker, state.period, state.strategy);
     state.stockData = data;
     updateHeader(data);
     ChartManager.updateCharts(data);
@@ -181,13 +182,14 @@ async function loadStockData() {
 
 async function loadBacktest(ticker) {
   try {
-    const data = await API.getBacktest(ticker, state.cutLoss, state.period);
+    const data = await API.getBacktest(ticker, state.cutLoss, state.period, state.strategy);
     state.backtestData = data;
     renderSummaryCards(data.summary);
     renderSignalTable(data.trades);
-    // Update section title to show active period
+    // Update section title to show active period + strategy
     const titleEl = document.getElementById("backtest-title");
-    if (titleEl) titleEl.textContent = `Buy Signals & Backtest — Last ${state.period}`;
+    const sLabel = state.strategy === 2 ? "S2 Momentum" : "S1 Oversold";
+    if (titleEl) titleEl.textContent = `Buy Signals & Backtest — ${sLabel} — Last ${state.period}`;
   } catch (e) {
     console.error("Backtest error:", e);
   }
@@ -433,11 +435,26 @@ function initTabs() {
   });
 }
 
+// ─── Strategy Buttons ─────────────────────────────────────────────────────────
+function initStrategyButtons() {
+  document.querySelectorAll(".strategy-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const s = parseInt(btn.dataset.strategy, 10);
+      if (s === state.strategy) return;
+      state.strategy = s;
+      document.querySelectorAll(".strategy-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      if (state.activeTicker) loadStockData();
+    });
+  });
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
   ChartManager.initCharts();
   initPeriodButtons();
   initCutLossButtons();
+  initStrategyButtons();
   initSearch();
   initRefreshButton();
   initTabs();

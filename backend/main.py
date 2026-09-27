@@ -79,6 +79,7 @@ def health():
 def get_stock_data(
     ticker: str,
     period: str = Query("2Y", description="1M|3M|6M|1Y|2Y|5Y|ALL"),
+    strategy: int = Query(1, description="1=Oversold Reversal, 2=MACD Momentum"),
 ):
     """Return OHLCV + indicators formatted for the chart."""
     ticker = ticker.upper()
@@ -88,7 +89,7 @@ def get_stock_data(
     if df.empty:
         raise HTTPException(status_code=404, detail=f"No data found for {ticker}")
 
-    df = compute_indicators(df)
+    df = compute_indicators(df, strategy=strategy)
 
     candles, volumes, ma200, signals = prepare_chart_data(df, period_days=period_days)
 
@@ -108,31 +109,35 @@ def get_stock_data(
         "volumes": volumes,
         "ma200": ma200,
         "signals": signals,
+        "strategy": strategy,
     }
 
 
 @app.get("/api/stocks/{ticker}/signals")
-def get_stock_signals(ticker: str):
+def get_stock_signals(
+    ticker: str,
+    strategy: int = Query(1, description="1=Oversold Reversal, 2=MACD Momentum"),
+):
     """Return all buy signals (date + price) for a ticker."""
     ticker = ticker.upper()
     df = get_or_fetch(ticker)
     if df.empty:
         raise HTTPException(status_code=404, detail=f"No data for {ticker}")
 
-    df = compute_indicators(df)
+    df = compute_indicators(df, strategy=strategy)
     sigs = get_signals(df)
 
     result = []
     for _, row in sigs.iterrows():
         result.append({
-            "date": str(row.get("date", "")),
+            "date":  str(row.get("date", "")),
             "close": round(float(row["close"]), 2) if not pd.isna(row["close"]) else None,
-            "rsi": round(float(row["rsi"]), 2) if not pd.isna(row["rsi"]) else None,
-            "macd": round(float(row["macd"]), 4) if not pd.isna(row["macd"]) else None,
+            "rsi":   round(float(row["rsi"]),   2) if not pd.isna(row["rsi"])   else None,
+            "macd":  round(float(row["macd"]),  4) if not pd.isna(row["macd"])  else None,
             "ma200": round(float(row["ma200"]), 2) if not pd.isna(row["ma200"]) else None,
         })
 
-    return {"ticker": ticker, "signals": result, "count": len(result)}
+    return {"ticker": ticker, "signals": result, "count": len(result), "strategy": strategy}
 
 
 @app.get("/api/stocks/{ticker}/backtest")
@@ -140,6 +145,7 @@ def get_backtest(
     ticker: str,
     cut_loss: Optional[float] = Query(None, description="Stop-loss %, e.g. 7 for 7%"),
     period: str = Query("ALL", description="Time period filter: 1M|3M|6M|1Y|2Y|5Y|ALL"),
+    strategy: int = Query(1, description="1=Oversold Reversal, 2=MACD Momentum"),
 ):
     """Run backtest and return summary + detail tables, filtered to the selected period."""
     ticker = ticker.upper()
@@ -147,7 +153,7 @@ def get_backtest(
     if df.empty:
         raise HTTPException(status_code=404, detail=f"No data for {ticker}")
 
-    df = compute_indicators(df)
+    df = compute_indicators(df, strategy=strategy)
 
     # Filter by actual calendar date so "2Y" means exactly 2 calendar years back
     period_days = PERIOD_MAP.get(period.upper(), 0)
@@ -158,6 +164,8 @@ def get_backtest(
     cut_loss_decimal = cut_loss / 100 if cut_loss else None
     result = run_backtest(df, ticker=ticker, cut_loss_pct=cut_loss_decimal)
     result["period"] = period
+    result["strategy"] = strategy
+    return result
     return result
 
 
