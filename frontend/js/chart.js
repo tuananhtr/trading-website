@@ -45,8 +45,9 @@ const CHART_OPTIONS = {
       return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
     },
   },
-  handleScroll: true,
-  handleScale: true,
+  handleScroll: false,
+  handleScale:  false,
+  kineticScroll: { mouse: false, touch: false },
 };
 
 function initCharts() {
@@ -203,6 +204,10 @@ function updateCharts(data) {
 
   priceChart.timeScale().fitContent();
   if (macdChart) macdChart.timeScale().fitContent();
+
+  // Lock the visible range to always show full period
+  priceChart.timeScale().applyOptions({ lockVisibleTimeRangeOnResize: true });
+  if (macdChart) macdChart.timeScale().applyOptions({ lockVisibleTimeRangeOnResize: true });
 }
 
 function updateMacdChart(macdData) {
