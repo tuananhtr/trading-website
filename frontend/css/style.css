@@ -505,7 +505,7 @@ html, body {
 .toast.error { border-color: var(--red); }
 @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
 
-/* ── MACD chart placeholder ── */
+/* ── MACD sub-chart ── */
 #macd-chart {
   width: 100%;
   height: 100px;

@@ -1,15 +1,13 @@
 /**
  * chart.js — TradingView Lightweight Charts integration.
  *
- * Architecture: single price chart + volume as an overlay pane on the
- * same chart instance (so only ONE TradingView logo appears).
- * MACD uses a second chart instance but its logo is hidden via CSS.
+ * Architecture: single price chart (area line + MA200 + buy signals).
+ * MACD uses a second chart instance with logo hidden via CSS.
  */
 
 let priceChart = null;
 let candleSeries = null;
 let ma200Series = null;
-let volumeSeries = null;   // lives inside priceChart, separate scale
 let macdChart = null;
 let macdHistSeries = null;
 let macdLineSeries = null;
@@ -21,7 +19,7 @@ const CHART_OPTIONS = {
     textColor: "#64748b",
     fontSize: 11,
     fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
-    attributionLogo: false,   // hide TV logo where supported (v4.2+)
+    attributionLogo: false,
   },
   grid: {
     vertLines: { color: "rgba(31,45,61,0.5)" },
@@ -34,7 +32,7 @@ const CHART_OPTIONS = {
   },
   rightPriceScale: {
     borderColor: "rgba(31,45,61,0.8)",
-    scaleMargins: { top: 0.06, bottom: 0.20 },  // bottom 20% reserved for volume
+    scaleMargins: { top: 0.06, bottom: 0.06 },  // full height now — no volume
   },
   timeScale: {
     borderColor: "rgba(31,45,61,0.8)",
@@ -60,20 +58,20 @@ function initCharts() {
   if (priceChart) { priceChart.remove(); priceChart = null; }
   if (macdChart)  { macdChart.remove();  macdChart  = null; }
 
-  // ── Price + Volume Chart (single instance) ──────────────────────────
+  // ── Price Chart ──────────────────────────────────────────────────────
   priceChart = LightweightCharts.createChart(priceEl, {
     ...CHART_OPTIONS,
     width:  priceEl.clientWidth,
     height: priceEl.clientHeight,
   });
 
-  // ── Area / Line price series (cleaner at all zoom levels) ──
+  // Area / line series
   candleSeries = priceChart.addAreaSeries({
     lineColor:        "#3b82f6",
     topColor:         "rgba(59,130,246,0.18)",
     bottomColor:      "rgba(59,130,246,0.00)",
     lineWidth:        2,
-    priceLineVisible: false,   // hide the red horizontal price line
+    priceLineVisible: false,
     lastValueVisible: true,
     crosshairMarkerVisible: true,
     crosshairMarkerRadius: 4,
@@ -81,71 +79,44 @@ function initCharts() {
     crosshairMarkerBackgroundColor: "#1e3a5f",
   });
 
-  // MA200 line overlay
+  // MA200 dashed overlay
   ma200Series = priceChart.addLineSeries({
     color:            "rgba(148,163,184,0.75)",
     lineWidth:        1.5,
-    lineStyle:        1,        // dashed
+    lineStyle:        1,
     title:            "MA200",
     priceLineVisible: false,
     lastValueVisible: true,
   });
 
-  // Volume histogram — uses a hidden separate price scale so it doesn't
-  // interfere with the candle scale, and sits in the bottom 20% of the chart
-  volumeSeries = priceChart.addHistogramSeries({
-    priceFormat:      { type: "volume" },
-    priceScaleId:     "vol",    // named scale, hidden on right
-    lastValueVisible: false,
-    priceLineVisible: false,
-  });
-  priceChart.priceScale("vol").applyOptions({
-    scaleMargins: { top: 0.80, bottom: 0.00 },  // occupy bottom 20%
-    visible: false,                              // hide the volume price axis
-  });
-
-  // ── MACD Chart (separate small chart below) ──────────────────────────
+  // ── MACD Chart ───────────────────────────────────────────────────────
   if (macdEl) {
     macdChart = LightweightCharts.createChart(macdEl, {
       ...CHART_OPTIONS,
       width:  macdEl.clientWidth,
       height: macdEl.clientHeight,
-      layout: {
-        ...CHART_OPTIONS.layout,
-        attributionLogo: false,
-      },
+      layout: { ...CHART_OPTIONS.layout, attributionLogo: false },
       rightPriceScale: {
-        borderColor:   "rgba(31,45,61,0.8)",
-        scaleMargins:  { top: 0.1, bottom: 0.1 },
+        borderColor:  "rgba(31,45,61,0.8)",
+        scaleMargins: { top: 0.1, bottom: 0.1 },
       },
-      timeScale: {
-        ...CHART_OPTIONS.timeScale,
-        visible: false,   // time axis already shown on main chart
-      },
+      timeScale: { ...CHART_OPTIONS.timeScale, visible: false },
     });
 
     macdHistSeries = macdChart.addHistogramSeries({
       priceLineVisible: false,
       lastValueVisible: false,
     });
-
     macdLineSeries = macdChart.addLineSeries({
-      color:            "#3b82f6",
-      lineWidth:        1.5,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      title:            "MACD",
+      color: "#3b82f6", lineWidth: 1.5,
+      priceLineVisible: false, lastValueVisible: false, title: "MACD",
     });
-
     macdSignalSeries = macdChart.addLineSeries({
-      color:            "#f59e0b",
-      lineWidth:        1.5,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      title:            "Signal",
+      color: "#f59e0b", lineWidth: 1.5,
+      priceLineVisible: false, lastValueVisible: false, title: "Signal",
     });
 
-    // Sync MACD time scale with price chart (zoom/pan together)
+    // Sync time scales
     priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (range && macdChart) macdChart.timeScale().setVisibleLogicalRange(range);
     });
@@ -154,7 +125,7 @@ function initCharts() {
     });
   }
 
-  // Resize observer — keeps charts filling their containers
+  // Resize observer
   const ro = new ResizeObserver(() => {
     if (priceChart) priceChart.resize(priceEl.clientWidth, priceEl.clientHeight);
     if (macdChart && macdEl) macdChart.resize(macdEl.clientWidth, macdEl.clientHeight);
@@ -166,28 +137,11 @@ function initCharts() {
 function updateCharts(data) {
   if (!priceChart || !data) return;
 
-  const { candles, volumes, ma200, signals } = data;
+  const { candles, ma200, signals } = data;
 
-  // Area series needs {time, value} — use close price
+  // Area series uses {time, value} (close price)
   if (candles && candles.length) {
-    candleSeries.setData(
-      candles.map((c) => ({ time: c.time, value: c.close }))
-    );
-  }
-
-  // Volume bars — normalize to 0-1 so outlier spikes don't crush everything else
-  if (volumes && volumes.length) {
-    const maxVol = Math.max(...volumes.map((v) => v.value || 0)) || 1;
-    const colored = volumes.map((v, i) => {
-      const c = candles && candles[i];
-      const isUp = c ? c.close >= c.open : true;
-      return {
-        time:  v.time,
-        value: v.value / maxVol,          // normalize 0-1
-        color: isUp ? "rgba(16,185,129,0.55)" : "rgba(239,68,68,0.45)",
-      };
-    });
-    volumeSeries.setData(colored);
+    candleSeries.setData(candles.map((c) => ({ time: c.time, value: c.close })));
   }
 
   if (ma200 && ma200.length) {
@@ -196,7 +150,7 @@ function updateCharts(data) {
     ma200Series.setData([]);
   }
 
-  // Buy signal arrow markers
+  // Buy signal markers
   const markers = (signals || []).map((s) => ({
     time:     s.time,
     position: "belowBar",
@@ -208,11 +162,11 @@ function updateCharts(data) {
   candleSeries.setMarkers(markers);
 
   priceChart.timeScale().fitContent();
-  if (macdChart) macdChart.timeScale().fitContent();
-
-  // Lock the visible range to always show full period
   priceChart.timeScale().applyOptions({ lockVisibleTimeRangeOnResize: true });
-  if (macdChart) macdChart.timeScale().applyOptions({ lockVisibleTimeRangeOnResize: true });
+  if (macdChart) {
+    macdChart.timeScale().fitContent();
+    macdChart.timeScale().applyOptions({ lockVisibleTimeRangeOnResize: true });
+  }
 }
 
 function updateMacdChart(macdData) {
