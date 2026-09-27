@@ -436,6 +436,11 @@ function initTabs() {
 }
 
 // ─── Strategy Buttons ─────────────────────────────────────────────────────────
+const STRATEGY_DESC = {
+  1: "MA200 ↓ & RSI&lt;30 & MACD cross ↑",
+  2: "MACD cross ↑ & MACD &gt; 0",
+};
+
 function initStrategyButtons() {
   document.querySelectorAll(".strategy-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -444,6 +449,9 @@ function initStrategyButtons() {
       state.strategy = s;
       document.querySelectorAll(".strategy-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
+      // Update description text
+      const descEl = document.getElementById("strategy-desc");
+      if (descEl) descEl.innerHTML = STRATEGY_DESC[s] || "";
       if (state.activeTicker) loadStockData();
     });
   });
