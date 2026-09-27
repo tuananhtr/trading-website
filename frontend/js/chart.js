@@ -34,7 +34,7 @@ const CHART_OPTIONS = {
   },
   rightPriceScale: {
     borderColor: "rgba(31,45,61,0.8)",
-    scaleMargins: { top: 0.08, bottom: 0.22 },  // bottom margin reserved for volume bars
+    scaleMargins: { top: 0.06, bottom: 0.20 },  // bottom 20% reserved for volume
   },
   timeScale: {
     borderColor: "rgba(31,45,61,0.8)",
@@ -66,14 +66,18 @@ function initCharts() {
     height: priceEl.clientHeight,
   });
 
-  // Candlestick series
-  candleSeries = priceChart.addCandlestickSeries({
-    upColor:        "#10b981",
-    downColor:      "#ef4444",
-    borderUpColor:  "#10b981",
-    borderDownColor:"#ef4444",
-    wickUpColor:    "#10b981",
-    wickDownColor:  "#ef4444",
+  // ── Area / Line price series (cleaner at all zoom levels) ──
+  candleSeries = priceChart.addAreaSeries({
+    lineColor:        "#3b82f6",
+    topColor:         "rgba(59,130,246,0.18)",
+    bottomColor:      "rgba(59,130,246,0.00)",
+    lineWidth:        2,
+    priceLineVisible: false,   // hide the red horizontal price line
+    lastValueVisible: true,
+    crosshairMarkerVisible: true,
+    crosshairMarkerRadius: 4,
+    crosshairMarkerBorderColor: "#3b82f6",
+    crosshairMarkerBackgroundColor: "#1e3a5f",
   });
 
   // MA200 line overlay
@@ -163,8 +167,22 @@ function updateCharts(data) {
 
   const { candles, volumes, ma200, signals } = data;
 
-  if (candles && candles.length) candleSeries.setData(candles);
-  if (volumes && volumes.length) volumeSeries.setData(volumes);
+  // Area series needs {time, value} — use close price
+  if (candles && candles.length) {
+    candleSeries.setData(
+      candles.map((c) => ({ time: c.time, value: c.close }))
+    );
+  }
+
+  // Volume bars colored by direction (green = up day, red = down day)
+  if (volumes && volumes.length) {
+    const colored = volumes.map((v, i) => {
+      const c = candles && candles[i];
+      const isUp = c ? c.close >= c.open : true;
+      return { ...v, color: isUp ? "rgba(16,185,129,0.5)" : "rgba(239,68,68,0.4)" };
+    });
+    volumeSeries.setData(colored);
+  }
 
   if (ma200 && ma200.length) {
     ma200Series.setData(ma200);
