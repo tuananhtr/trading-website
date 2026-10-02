@@ -34,39 +34,49 @@ def _download(ticker: str, start: str, end: str) -> pd.DataFrame:
     columns [open, high, low, close, volume].
     """
     yf_sym = _yf_ticker(ticker)
-    try:
-        raw = yf.download(
-            yf_sym,
-            start=start,
-            end=end,
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-            multi_level_index=False,
-        )
-    except TypeError:
-        # Older yfinance versions use multi_level_column
-        raw = yf.download(
-            yf_sym,
-            start=start,
-            end=end,
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-        )
+    logger.info(f"[{ticker}] Calling yfinance for {yf_sym} {start}→{end}")
+
+    raw = None
+    # Try newer yfinance API first (0.2.42+)
+    for kwargs in [
+        {"multi_level_index": False},   # newer yfinance
+        {},                              # older yfinance
+    ]:
+        try:
+            raw = yf.download(
+                yf_sym,
+                start=start,
+                end=end,
+                interval="1d",
+                auto_adjust=True,
+                progress=False,
+                **kwargs,
+            )
+            break
+        except TypeError as e:
+            logger.warning(f"[{ticker}] yf.download param error ({e}), retrying…")
+        except Exception as e:
+            logger.error(f"[{ticker}] yf.download failed: {type(e).__name__}: {e}")
+            return pd.DataFrame()
 
     if raw is None or raw.empty:
-        logger.error(f"[{ticker}] yfinance returned no data for {start} → {end}")
+        logger.warning(f"[{ticker}] yfinance returned empty DataFrame")
         return pd.DataFrame()
 
-    # Normalise columns
-    raw.columns = [c.lower() for c in raw.columns]
+    logger.info(f"[{ticker}] Raw columns: {list(raw.columns)}, shape: {raw.shape}")
+
+    # Flatten MultiIndex columns if present (yfinance sometimes returns them)
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = [col[0].lower() for col in raw.columns]
+    else:
+        raw.columns = [c.lower() for c in raw.columns]
+
     raw.index.name = "date"
 
     required = {"open", "high", "low", "close", "volume"}
     missing = required - set(raw.columns)
     if missing:
-        logger.error(f"[{ticker}] Missing columns: {missing}")
+        logger.error(f"[{ticker}] Missing columns after normalise: {missing}. Have: {list(raw.columns)}")
         return pd.DataFrame()
 
     df = raw[["open", "high", "low", "close", "volume"]].copy()
