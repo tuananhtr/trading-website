@@ -153,19 +153,28 @@ def get_backtest(
     if df.empty:
         raise HTTPException(status_code=404, detail=f"No data for {ticker}")
 
+    # Always compute indicators on FULL data so MA200/RSI/MACD have enough bars.
+    # Filtering the df first would leave < 200 rows for short periods like 1M/3M/6M.
     df = compute_indicators(df, strategy=strategy)
-
-    # Filter by actual calendar date so "2Y" means exactly 2 calendar years back
-    period_days = PERIOD_MAP.get(period.upper(), 0)
-    if period_days > 0:
-        cutoff = pd.Timestamp.now() - pd.Timedelta(days=period_days)
-        df = df[df.index >= cutoff]
 
     cut_loss_decimal = cut_loss / 100 if cut_loss else None
     result = run_backtest(df, ticker=ticker, cut_loss_pct=cut_loss_decimal)
+
+    # Filter trades by signal_date AFTER backtest runs on full data
+    period_days = PERIOD_MAP.get(period.upper(), 0)
+    if period_days > 0:
+        cutoff = (pd.Timestamp.now() - pd.Timedelta(days=period_days)).date()
+        result["trades"] = [
+            t for t in result["trades"]
+            if pd.to_datetime(t["signal_date"]).date() >= cutoff
+        ]
+        # Recompute summary on the filtered trades
+        from backtest import _compute_summary
+        result["summary"] = _compute_summary(result["trades"])
+        result["summary"]["ticker"] = ticker
+
     result["period"] = period
     result["strategy"] = strategy
-    return result
     return result
 
 
