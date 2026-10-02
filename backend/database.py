@@ -79,15 +79,34 @@ def upsert_ohlcv(df: pd.DataFrame, ticker: str) -> int:
     if df.empty:
         return 0
 
-    rows = df.reset_index() if df.index.name == "date" else df
-    rows = rows.to_dict(orient="records")
+    rows = df.reset_index() if df.index.name == "date" else df.copy()
+
+    # Convert pandas Timestamp → Python date so SQLAlchemy 2.x can bind it
+    def _to_date(val):
+        if isinstance(val, pd.Timestamp):
+            return val.date()
+        if isinstance(val, datetime):
+            return val.date()
+        return val  # already a date or string
+
+    records = [
+        {
+            "ticker": ticker,
+            "date":   _to_date(r.get("date")),
+            "open":   float(r.get("open"))   if r.get("open")   is not None else None,
+            "high":   float(r.get("high"))   if r.get("high")   is not None else None,
+            "low":    float(r.get("low"))    if r.get("low")    is not None else None,
+            "close":  float(r.get("close"))  if r.get("close")  is not None else None,
+            "volume": float(r.get("volume")) if r.get("volume") is not None else None,
+        }
+        for r in rows.to_dict(orient="records")
+    ]
 
     # Detect whether we're using PostgreSQL or SQLite for upsert syntax
     is_postgres = DATABASE_URL != ""
 
     with SessionLocal() as session:
         if is_postgres:
-            # PostgreSQL upsert
             session.execute(
                 text(
                     "INSERT INTO stock_prices (ticker, date, open, high, low, close, volume) "
@@ -96,25 +115,20 @@ def upsert_ohlcv(df: pd.DataFrame, ticker: str) -> int:
                     "open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low, "
                     "close=EXCLUDED.close, volume=EXCLUDED.volume"
                 ),
-                [{"ticker": ticker, "date": r.get("date"), "open": r.get("open"),
-                  "high": r.get("high"), "low": r.get("low"),
-                  "close": r.get("close"), "volume": r.get("volume")} for r in rows],
+                records,
             )
         else:
-            # SQLite upsert
             session.execute(
                 text(
                     "INSERT OR REPLACE INTO stock_prices "
                     "(ticker, date, open, high, low, close, volume) VALUES "
                     "(:ticker, :date, :open, :high, :low, :close, :volume)"
                 ),
-                [{"ticker": ticker, "date": r.get("date"), "open": r.get("open"),
-                  "high": r.get("high"), "low": r.get("low"),
-                  "close": r.get("close"), "volume": r.get("volume")} for r in rows],
+                records,
             )
         session.commit()
 
-    return len(rows)
+    return len(records)
 
 
 def get_ohlcv(ticker: str, start: Optional[date] = None, end: Optional[date] = None) -> pd.DataFrame:
