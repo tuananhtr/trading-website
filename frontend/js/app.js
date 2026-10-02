@@ -291,7 +291,7 @@ function renderSignalTable(trades) {
       <tr>
         <td class="td-date">${t.signal_date}</td>
         <td class="td-ticker">${t.ticker}</td>
-        <td><span class="badge badge-signal">MA200+RSI+MACD</span></td>
+        <td><span class="badge badge-signal">${state.strategy === 2 ? "MACD>0+Cross" : "MA200+RSI+MACD"}</span></td>
         <td class="td-price">${fmt(t.entry_price)}</td>
         <td>${exitPrice}</td>
         <td>${exitBadge}</td>
