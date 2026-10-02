@@ -154,23 +154,53 @@
       <div class="tab-panel" id="panel-info">
         <div class="table-wrap" style="padding: 20px 24px; line-height: 2;">
           <div style="color:var(--text-dim)">
-            <h3 style="color:var(--text-primary);margin-bottom:12px;font-size:14px;">📐 Strategy: Long-term Reversal</h3>
+
+            <!-- Strategy 1 -->
+            <h3 style="color:var(--text-primary);margin-bottom:12px;font-size:14px;">📐 Strategy 1: Long-term Reversal (Oversold)</h3>
             <div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:12px;">
               <div style="color:var(--text-muted);font-weight:600;">Condition 1 — Trend</div>
               <div>Close price <strong style="color:var(--amber)">below MA(200)</strong> — stock is in a long-term downtrend / deep dip</div>
-              <div style="color:var(--text-muted);font-weight:600;">Condition 2 — Momentum</div>
-              <div><strong style="color:var(--amber)">RSI(14) &lt; 30</strong> — stock is in oversold territory</div>
+              <div style="color:var(--text-muted);font-weight:600;">Condition 2 — Oversold</div>
+              <div><strong style="color:var(--amber)">RSI(14) &lt; 30</strong> — stock is in oversold territory (within last 5 bars)</div>
               <div style="color:var(--text-muted);font-weight:600;">Condition 3 — Confirmation</div>
               <div>MACD(12,26,9) line <strong style="color:var(--green)">crosses above signal line</strong> — momentum turning bullish</div>
+              <div style="color:var(--text-muted);font-weight:600;">Use Case</div>
+              <div>Contrarian dip-buying — entering during deep corrections when price is cheap and momentum is recovering</div>
               <div style="color:var(--text-muted);font-weight:600;">Entry</div>
               <div>Open price of the <strong>next bar</strong> after signal bar</div>
               <div style="color:var(--text-muted);font-weight:600;">Exit</div>
               <div>Current date (open position marked-to-market) or cut-loss trigger</div>
+            </div>
+
+            <!-- Divider -->
+            <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:24px 0;">
+
+            <!-- Strategy 2 -->
+            <h3 style="color:var(--text-primary);margin-bottom:12px;font-size:14px;">⚡ Strategy 2: MACD Momentum Breakout</h3>
+            <div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:12px;">
+              <div style="color:var(--text-muted);font-weight:600;">Condition 1 — Momentum</div>
+              <div>MACD(12,26,9) line <strong style="color:var(--green)">crosses above signal line</strong> — short-term momentum turning bullish</div>
+              <div style="color:var(--text-muted);font-weight:600;">Condition 2 — Trend</div>
+              <div><strong style="color:var(--green)">MACD &gt; 0</strong> — momentum is in positive territory, confirming an overall uptrend</div>
+              <div style="color:var(--text-muted);font-weight:600;">Use Case</div>
+              <div>Trend-following — entering when the trend is already bullish and momentum re-accelerates upward</div>
+              <div style="color:var(--text-muted);font-weight:600;">Entry</div>
+              <div>Open price of the <strong>next bar</strong> after signal bar</div>
+              <div style="color:var(--text-muted);font-weight:600;">Exit</div>
+              <div>Current date (open position marked-to-market) or cut-loss trigger</div>
+            </div>
+
+            <!-- Divider -->
+            <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:24px 0;">
+
+            <!-- Shared info -->
+            <div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:12px;">
               <div style="color:var(--text-muted);font-weight:600;">Fee Model</div>
               <div>Buy: 0.15% | Sell: 0.15% + 0.10% tax = <strong style="color:var(--red)">~0.40% round-trip</strong></div>
               <div style="color:var(--text-muted);font-weight:600;">Data Source</div>
               <div>yfinance (.VN suffix) — stored locally in SQLite from 2010</div>
             </div>
+
           </div>
         </div>
       </div>
