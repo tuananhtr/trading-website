@@ -1,11 +1,9 @@
 """
-data_fetcher.py — Downloads OHLCV data using vnstock (Vietnam-specific).
+data_fetcher.py — Downloads OHLCV data using yfinance.
 
-Primary source  : TCBS (Techcombank Securities) — reliable, no auth needed
-Fallback source : SSI  (SSI Securities)
-
-vnstock 0.2.x is used — completely free, no rate limits.
-Ticker format: plain symbol e.g. "HPG", "VNM" (no exchange suffix needed).
+Vietnam stocks use the .VN suffix on Yahoo Finance (e.g. HPG.VN, VNM.VN).
+Data is downloaded once and stored in the local DB; subsequent calls
+only fetch missing days (incremental updates).
 """
 from __future__ import annotations
 
@@ -14,85 +12,77 @@ from datetime import date, timedelta
 from typing import Optional
 
 import pandas as pd
+import yfinance as yf
 
 from database import get_ohlcv, get_last_stored_date, has_data, upsert_ohlcv
 
 logger = logging.getLogger(__name__)
 
 START_DATE = "2010-01-01"
-SOURCES = ["TCBS", "SSI", "VND"]   # tried in order
 
 
-# ---------------------------------------------------------------------------
-# Internal download helper
-# ---------------------------------------------------------------------------
+def _yf_ticker(ticker: str) -> str:
+    """Ensure ticker has .VN suffix for Yahoo Finance."""
+    t = ticker.upper().replace(".VN", "")
+    return f"{t}.VN"
+
 
 def _download(ticker: str, start: str, end: str) -> pd.DataFrame:
     """
-    Download daily OHLCV from vnstock, trying each source in order.
+    Download daily OHLCV from Yahoo Finance.
     Returns a DataFrame with DatetimeIndex named 'date' and
     columns [open, high, low, close, volume].
     """
-    from vnstock import stock_historical_data   # imported here to keep startup fast
-
-    symbol = ticker.upper().replace(".VN", "")  # strip suffix if user passed one
-
-    raw = pd.DataFrame()
-    for source in SOURCES:
-        try:
-            raw = stock_historical_data(
-                symbol=symbol,
-                start_date=start,
-                end_date=end,
-                resolution="1D",
-                type="stock",
-                beautify=True,
-                source=source,
-            )
-            if raw is not None and not raw.empty:
-                logger.info(f"[{ticker}] Downloaded {len(raw)} rows from {source}")
-                break
-        except Exception as exc:
-            logger.warning(f"[{ticker}] {source} failed: {exc}")
-            raw = pd.DataFrame()
+    yf_sym = _yf_ticker(ticker)
+    try:
+        raw = yf.download(
+            yf_sym,
+            start=start,
+            end=end,
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            multi_level_index=False,
+        )
+    except TypeError:
+        # Older yfinance versions use multi_level_column
+        raw = yf.download(
+            yf_sym,
+            start=start,
+            end=end,
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+        )
 
     if raw is None or raw.empty:
-        logger.error(f"[{ticker}] All sources failed for {start} → {end}")
+        logger.error(f"[{ticker}] yfinance returned no data for {start} → {end}")
         return pd.DataFrame()
 
-    # ── Normalise columns ──────────────────────────────────────────────────
-    # vnstock beautify=True returns: time, open, high, low, close, volume
+    # Normalise columns
     raw.columns = [c.lower() for c in raw.columns]
+    raw.index.name = "date"
 
-    # Rename 'time' → 'date' if needed
-    if "time" in raw.columns and "date" not in raw.columns:
-        raw = raw.rename(columns={"time": "date"})
-
-    required = {"date", "open", "high", "low", "close", "volume"}
+    required = {"open", "high", "low", "close", "volume"}
     missing = required - set(raw.columns)
     if missing:
-        logger.error(f"[{ticker}] Missing columns after normalise: {missing}")
+        logger.error(f"[{ticker}] Missing columns: {missing}")
         return pd.DataFrame()
 
-    raw["date"] = pd.to_datetime(raw["date"])
-    raw = raw.set_index("date")
-    raw = raw[["open", "high", "low", "close", "volume"]].apply(
-        pd.to_numeric, errors="coerce"
-    )
-    raw = raw.dropna(subset=["close"])
-    raw = raw.sort_index()
-    return raw
+    df = raw[["open", "high", "low", "close", "volume"]].copy()
+    df = df.apply(pd.to_numeric, errors="coerce")
+    df = df.dropna(subset=["close"])
+    df = df.sort_index()
+    logger.info(f"[{ticker}] Downloaded {len(df)} rows from yfinance")
+    return df
 
 
 # ---------------------------------------------------------------------------
-# Public API (same interface as before — main.py does not change)
+# Public API
 # ---------------------------------------------------------------------------
 
 def fetch_and_store(ticker: str) -> pd.DataFrame:
-    """
-    Full initial download: fetch from START_DATE to today and persist to DB.
-    Called the first time a ticker is added to the watchlist.
-    """
+    """Full initial download from START_DATE to today."""
     ticker = ticker.upper().replace(".VN", "")
     logger.info(f"[{ticker}] Full download from {START_DATE}…")
 
@@ -109,17 +99,13 @@ def fetch_and_store(ticker: str) -> pd.DataFrame:
 
 
 def incremental_update(ticker: str) -> pd.DataFrame:
-    """
-    Fetch only missing days (last stored date → today) and append to DB.
-    Called each time a ticker is loaded to keep data fresh.
-    """
+    """Fetch only missing days and append to DB."""
     ticker = ticker.upper().replace(".VN", "")
 
     last = get_last_stored_date(ticker)
     if last is None:
         return fetch_and_store(ticker)
 
-    # Start from the day after last stored date
     start = (last + timedelta(days=1)).strftime("%Y-%m-%d")
     today = date.today().strftime("%Y-%m-%d")
 
@@ -138,10 +124,7 @@ def incremental_update(ticker: str) -> pd.DataFrame:
 
 
 def get_or_fetch(ticker: str) -> pd.DataFrame:
-    """
-    Main entry point used by API routes.
-    Returns full OHLCV from DB, fetching/updating from vnstock if needed.
-    """
+    """Main entry point — returns full OHLCV, fetching/updating as needed."""
     ticker = ticker.upper().replace(".VN", "")
 
     if not has_data(ticker):
