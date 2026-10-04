@@ -32,12 +32,15 @@ const CHART_OPTIONS = {
   },
   rightPriceScale: {
     borderColor: "rgba(31,45,61,0.8)",
-    scaleMargins: { top: 0.06, bottom: 0.06 },  // full height now — no volume
+    scaleMargins: { top: 0.06, bottom: 0.06 },
   },
   timeScale: {
     borderColor: "rgba(31,45,61,0.8)",
     timeVisible: true,
     secondsVisible: false,
+    rightOffset: 5,        // small gap after last bar — last bar not glued to edge
+    fixRightEdge: false,   // allow seeing the rightOffset gap
+    fixLeftEdge: true,     // prevent scrolling past first data point
     tickMarkFormatter: (time) => {
       const d = new Date(time * 1000);
       return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
@@ -160,7 +163,16 @@ function updateCharts(data) {
   }));
   candleSeries.setMarkers(markers);
 
-  priceChart.timeScale().fitContent();
+  // Set initial visible range to the selected period.
+  // Because all historical candles are loaded, zoom-out reveals older data.
+  const fromTs = data.period_from_ts || 0;
+  const toTs   = Math.floor(Date.now() / 1000) + 86400 * 5;  // +5 days right padding
+
+  if (fromTs > 0) {
+    priceChart.timeScale().setVisibleRange({ from: fromTs, to: toTs });
+  } else {
+    priceChart.timeScale().fitContent();  // ALL period — show everything
+  }
   if (macdChart) macdChart.timeScale().fitContent();
 }
 

@@ -91,13 +91,26 @@ def get_stock_data(
 
     df = compute_indicators(df, strategy=strategy)
 
-    candles, volumes, ma200, signals = prepare_chart_data(df, period_days=period_days)
+    # Always return ALL candles so user can zoom out to see full history.
+    # Period filter only controls which buy signal markers are shown.
+    candles, volumes, ma200, _ = prepare_chart_data(df, period_days=0)
+
+    # Filter signals to the selected period
+    if period_days > 0:
+        cutoff = pd.Timestamp.now() - pd.Timedelta(days=period_days)
+        df_period = df[df.index >= cutoff]
+    else:
+        df_period = df
+    _, _, _, signals = prepare_chart_data(df_period, period_days=0)
 
     # Latest price info
     last_close = float(df["close"].iloc[-1]) if not df.empty else 0
     prev_close = float(df["close"].iloc[-2]) if len(df) >= 2 else last_close
     change = last_close - prev_close
     change_pct = (change / prev_close * 100) if prev_close else 0
+
+    # Send the period cutoff timestamp so the frontend can set initial visible range
+    period_from_ts = int((pd.Timestamp.now() - pd.Timedelta(days=period_days)).timestamp()) if period_days > 0 else 0
 
     return {
         "ticker": ticker,
@@ -110,6 +123,8 @@ def get_stock_data(
         "ma200": ma200,
         "signals": signals,
         "strategy": strategy,
+        "period": period,
+        "period_from_ts": period_from_ts,
     }
 
 
