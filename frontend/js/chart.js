@@ -38,7 +38,7 @@ const CHART_OPTIONS = {
     borderColor: "rgba(31,45,61,0.8)",
     timeVisible: true,
     secondsVisible: false,
-    rightOffset: 5,        // small gap after last bar — last bar not glued to edge
+    rightOffset: 2,        // small gap after last bar
     fixRightEdge: false,   // allow seeing the rightOffset gap
     fixLeftEdge: true,     // prevent scrolling past first data point
     tickMarkFormatter: (time) => {
@@ -164,9 +164,12 @@ function updateCharts(data) {
   candleSeries.setMarkers(markers);
 
   // Set initial visible range to the selected period.
-  // Because all historical candles are loaded, zoom-out reveals older data.
+  // Right boundary = last candle + 3 days (avoids large empty gap on the right).
+  const lastTs = (candles && candles.length > 0)
+    ? candles[candles.length - 1].time
+    : Math.floor(Date.now() / 1000);
   const fromTs = data.period_from_ts || 0;
-  const toTs   = Math.floor(Date.now() / 1000) + 86400 * 5;  // +5 days right padding
+  const toTs   = lastTs + 86400 * 3;   // 3 days after last bar
 
   if (fromTs > 0) {
     priceChart.timeScale().setVisibleRange({ from: fromTs, to: toTs });
