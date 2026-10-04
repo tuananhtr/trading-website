@@ -43,9 +43,8 @@ const CHART_OPTIONS = {
       return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
     },
   },
-  handleScroll: false,
-  handleScale:  false,
-  kineticScroll: { mouse: false, touch: false },
+  handleScroll: true,
+  handleScale:  true,
 };
 
 function initCharts() {
@@ -162,11 +161,7 @@ function updateCharts(data) {
   candleSeries.setMarkers(markers);
 
   priceChart.timeScale().fitContent();
-  priceChart.timeScale().applyOptions({ lockVisibleTimeRangeOnResize: true });
-  if (macdChart) {
-    macdChart.timeScale().fitContent();
-    macdChart.timeScale().applyOptions({ lockVisibleTimeRangeOnResize: true });
-  }
+  if (macdChart) macdChart.timeScale().fitContent();
 }
 
 function updateMacdChart(macdData) {
