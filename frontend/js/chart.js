@@ -38,7 +38,7 @@ const CHART_OPTIONS = {
     borderColor: "rgba(31,45,61,0.8)",
     timeVisible: true,
     secondsVisible: false,
-    rightOffset: 2,        // small gap after last bar
+    rightOffset: 0,
     fixRightEdge: false,   // allow seeing the rightOffset gap
     fixLeftEdge: true,     // prevent scrolling past first data point
     tickMarkFormatter: (time) => {
@@ -169,7 +169,7 @@ function updateCharts(data) {
     ? candles[candles.length - 1].time
     : Math.floor(Date.now() / 1000);
   const fromTs = data.period_from_ts || 0;
-  const toTs   = lastTs + 86400 * 3;   // 3 days after last bar
+  const toTs   = lastTs;   // no gap — last bar flush at right edge
 
   if (fromTs > 0) {
     priceChart.timeScale().setVisibleRange({ from: fromTs, to: toTs });
