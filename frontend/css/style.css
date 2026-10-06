@@ -555,3 +555,39 @@ html, body {
   .summary-cards { grid-template-columns: repeat(2, 1fr); }
   .search-input { width: 120px; }
 }
+
+/* ── VN30 Ranking ── */
+.vn30-strat-btns {
+  display: flex;
+  gap: 4px;
+}
+.vn30-strat-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: 1px solid rgba(139,92,246,0.35);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.vn30-strat-btn:hover  { border-color: #8b5cf6; color: #c4b5fd; }
+.vn30-strat-btn.active { background: rgba(139,92,246,0.18); border-color: #8b5cf6; color: #c4b5fd; }
+
+.vn30-refresh-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.vn30-refresh-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.vn30-refresh-btn:disabled { opacity: 0.5; cursor: default; }
+
+#vn30-table thead th { white-space: nowrap; }
+#vn30-table tbody tr:hover td { background: rgba(255,255,255,0.03); }

@@ -238,6 +238,125 @@ VN_TICKERS = [
     "VMD", "VNE", "VOS", "VRC", "VSC", "VTO", "WHS", "AAA", "ADS", "APH",
 ]
 
+# ---- VN30 Ranking ----
+
+VN30_TICKERS = [
+    "VIC", "VHM", "VCB", "BID", "TCB", "CTG", "VPB", "GAS", "MBB", "HPG",
+    "VPL", "HDB", "GVR", "LPB", "STB", "ACB", "VNM", "FPT", "MSN", "MWG",
+    "VJC", "SSB", "SHB", "SSI", "SAB", "VRE", "VIB", "PLX", "TPB", "DGC",
+]
+
+# In-memory ranking cache  {strategy_int: {"payload": dict, "ts": datetime}}
+_vn30_cache: dict = {}
+
+
+@app.get("/api/vn30/ranking")
+def get_vn30_ranking(
+    strategy: int = Query(1, description="1=Oversold, 2=Momentum"),
+    refresh: bool = Query(False),
+):
+    """
+    Run 5-year backtest for every VN30 stock and return ranked by
+    average net P&L per trade.  Results are cached for 1 hour.
+    """
+    from datetime import datetime as _dt
+    from backtest import _compute_summary
+
+    now = _dt.utcnow()
+    cached = _vn30_cache.get(strategy)
+    if not refresh and cached:
+        age_s = (now - cached["ts"]).total_seconds()
+        if age_s < 3600:
+            return cached["payload"]
+
+    cutoff_5y = (pd.Timestamp.now() - pd.Timedelta(days=1825)).date()
+    results = []
+
+    for ticker in VN30_TICKERS:
+        try:
+            df = get_or_fetch(ticker)
+            if df.empty or len(df) < 200:
+                results.append({"ticker": ticker, "status": "no_data",
+                                 "last_close": None, "total_trades": 0})
+                continue
+
+            df_ind = compute_indicators(df, strategy=strategy)
+            bt = run_backtest(df_ind, ticker=ticker)
+
+            # Filter trades to last 5 years
+            trades_5y = [
+                t for t in bt.get("trades", [])
+                if pd.to_datetime(t["signal_date"]).date() >= cutoff_5y
+            ]
+            summary = _compute_summary(trades_5y)
+            last_close = float(df["close"].iloc[-1])
+
+            results.append({
+                "ticker": ticker,
+                "status": "ok",
+                "last_close": round(last_close, 0),
+                "total_trades": summary["total_trades"],
+                "win_rate_pct": summary["win_rate_pct"],
+                "avg_net_pnl_pct": summary["avg_net_pnl_pct"],
+                "avg_gross_pnl_pct": summary["avg_gross_pnl_pct"],
+                "total_net_pnl_pct": summary["total_net_pnl_pct"],
+                "best_trade_pct": summary["best_trade_pct"],
+                "worst_trade_pct": summary["worst_trade_pct"],
+                "avg_hold_days": summary["avg_hold_days"],
+            })
+        except Exception as exc:
+            logger.error(f"VN30 ranking [{ticker}]: {exc}")
+            results.append({"ticker": ticker, "status": "error",
+                             "last_close": None, "total_trades": 0})
+
+    # Rank by avg_net_pnl_pct; stocks with signals first, rest at bottom
+    has_signal = sorted(
+        [r for r in results if r.get("status") == "ok" and r["total_trades"] > 0],
+        key=lambda x: x["avg_net_pnl_pct"], reverse=True,
+    )
+    no_signal  = [r for r in results if r.get("status") == "ok" and r["total_trades"] == 0]
+    errored    = [r for r in results if r.get("status") not in ("ok",)]
+
+    for i, r in enumerate(has_signal, 1):
+        r["rank"] = i
+
+    payload = {
+        "strategy": strategy,
+        "period": "5Y",
+        "updated_at": now.isoformat() + "Z",
+        "results": has_signal + no_signal + errored,
+        "ranked_count": len(has_signal),
+    }
+    _vn30_cache[strategy] = {"payload": payload, "ts": now}
+    return payload
+
+
+@app.post("/api/vn30/refresh")
+def refresh_vn30(background_tasks: BackgroundTasks):
+    """Trigger background incremental update for all VN30 stocks."""
+    background_tasks.add_task(_vn30_refresh_task)
+    return {"message": "VN30 refresh started", "tickers": VN30_TICKERS}
+
+
+def _vn30_refresh_task():
+    """Download / update data for all 30 VN30 stocks, then clear ranking cache."""
+    from data_fetcher import incremental_update as _inc
+    for t in VN30_TICKERS:
+        try:
+            _inc(t)
+            logger.info(f"[VN30] {t} updated")
+        except Exception as e:
+            logger.warning(f"[VN30] {t} failed: {e}")
+    _vn30_cache.clear()
+    logger.info("[VN30] All stocks refreshed, cache cleared")
+
+
+@app.on_event("startup")
+async def _startup():
+    """On every server start, kick off a background VN30 refresh (daily update)."""
+    import threading
+    threading.Thread(target=_vn30_refresh_task, daemon=True).start()
+
 
 @app.get("/api/stocks/search")
 def search_tickers(q: str = Query("", min_length=0)):

@@ -457,12 +457,152 @@ function initStrategyButtons() {
   });
 }
 
+// ─── VN30 Ranking ─────────────────────────────────────────────────────────────
+let vn30Strategy = 1;  // active strategy in the VN30 sub-tab
+
+async function loadVn30Ranking(forceRefresh = false) {
+  const loading = document.getElementById("vn30-loading");
+  const table   = document.getElementById("vn30-table");
+  const empty   = document.getElementById("vn30-empty");
+
+  loading.style.display = "block";
+  table.style.display   = "none";
+  empty.style.display   = "none";
+
+  try {
+    const data = await API.getVn30Ranking(vn30Strategy, forceRefresh);
+    renderVn30Table(data);
+  } catch (err) {
+    loading.style.display = "none";
+    empty.style.display   = "block";
+    empty.querySelector("div:last-child").textContent = "Error: " + err.message;
+    showToast("VN30 load failed: " + err.message, "error");
+  }
+}
+
+function renderVn30Table(data) {
+  const loading = document.getElementById("vn30-loading");
+  const table   = document.getElementById("vn30-table");
+  const empty   = document.getElementById("vn30-empty");
+  const body    = document.getElementById("vn30-table-body");
+  const updated = document.getElementById("vn30-updated");
+
+  loading.style.display = "none";
+
+  if (!data.results || data.results.length === 0) {
+    empty.style.display = "block";
+    return;
+  }
+
+  // Format updated_at
+  if (data.updated_at) {
+    const d = new Date(data.updated_at);
+    updated.textContent = `Updated: ${d.toLocaleString("en-GB", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}`;
+  }
+
+  body.innerHTML = data.results.map((r) => {
+    const rankCell = r.rank
+      ? `<td style="font-weight:700;color:${r.rank<=3?"var(--amber)":"var(--text-muted)"};">${r.rank}</td>`
+      : `<td style="color:var(--text-muted);">—</td>`;
+
+    const price = r.last_close != null
+      ? Number(r.last_close).toLocaleString("en-US")
+      : "—";
+
+    if (r.total_trades === 0 || r.status !== "ok") {
+      return `<tr style="opacity:0.45;">
+        ${rankCell}
+        <td class="td-ticker">${r.ticker}</td>
+        <td>${price}</td>
+        <td colspan="6" style="color:var(--text-muted);font-size:11px;">
+          ${r.status === "error" ? "⚠ Error fetching data" : "No signals in 5Y"}
+        </td>
+      </tr>`;
+    }
+
+    const avgPnl  = r.avg_net_pnl_pct ?? 0;
+    const totPnl  = r.total_net_pnl_pct ?? 0;
+    const best    = r.best_trade_pct ?? 0;
+    const wr      = r.win_rate_pct ?? 0;
+    const hold    = r.avg_hold_days ?? 0;
+
+    const pnlClr  = (v) => v >= 0 ? "var(--green)" : "var(--red)";
+    const pnlFmt  = (v) => `${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(2)}%`;
+
+    // Medal for top 3
+    const medal = r.rank === 1 ? "🥇 " : r.rank === 2 ? "🥈 " : r.rank === 3 ? "🥉 " : "";
+
+    return `<tr>
+      ${rankCell}
+      <td class="td-ticker">${medal}${r.ticker}</td>
+      <td class="td-price">${price}</td>
+      <td style="text-align:center;">${r.total_trades}</td>
+      <td style="text-align:center;">${wr.toFixed(1)}%</td>
+      <td style="color:${pnlClr(avgPnl)};font-weight:700;">${pnlFmt(avgPnl)}</td>
+      <td style="text-align:center;color:var(--text-muted);">${hold.toFixed(0)}d</td>
+      <td style="color:var(--green);">▲ ${Math.abs(best).toFixed(2)}%</td>
+      <td style="color:${pnlClr(totPnl)};">${pnlFmt(totPnl)}</td>
+    </tr>`;
+  }).join("");
+
+  table.style.display = "";
+  empty.style.display = "none";
+}
+
+function initVn30Tab() {
+  // Strategy sub-tabs inside VN30 panel
+  document.querySelectorAll(".vn30-strat-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const s = parseInt(btn.dataset.vstrategy, 10);
+      if (s === vn30Strategy) return;
+      vn30Strategy = s;
+      document.querySelectorAll(".vn30-strat-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      loadVn30Ranking();
+    });
+  });
+
+  // Refresh button
+  const refreshBtn = document.getElementById("vn30-refresh-btn");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "⏳ Refreshing…";
+      showToast("Downloading VN30 prices in background…", "info");
+      try {
+        await API.refreshVn30();
+        showToast("VN30 data refresh started (takes ~2 min)", "success");
+        // After a delay, reload ranking with fresh data
+        setTimeout(() => loadVn30Ranking(true), 5000);
+      } catch (e) {
+        showToast("Refresh failed: " + e.message, "error");
+      } finally {
+        setTimeout(() => {
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = "🔄 Refresh";
+        }, 5000);
+      }
+    });
+  }
+
+  // Auto-load when tab becomes active
+  const vn30Tab = document.querySelector('[data-panel="panel-vn30"]');
+  if (vn30Tab) {
+    vn30Tab.addEventListener("click", () => {
+      // Only load once (table will show cached result on re-click)
+      const table = document.getElementById("vn30-table");
+      if (table.style.display === "none") loadVn30Ranking();
+    });
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
   ChartManager.initCharts();
   initPeriodButtons();
   initCutLossButtons();
   initStrategyButtons();
+  initVn30Tab();
   initSearch();
   initRefreshButton();
   initTabs();

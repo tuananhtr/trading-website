@@ -122,6 +122,7 @@
       <div class="tabs">
         <div class="tab active" data-panel="panel-trades">Trade Details</div>
         <div class="tab" data-panel="panel-info">Strategy Info</div>
+        <div class="tab" data-panel="panel-vn30">🏆 VN30 Ranking</div>
       </div>
 
       <!-- Tab: Trade Details -->
@@ -204,6 +205,56 @@
           </div>
         </div>
       </div>
+
+      <!-- Tab: VN30 Ranking -->
+      <div class="tab-panel" id="panel-vn30">
+        <div class="table-wrap" style="padding:16px 20px;">
+
+          <!-- Header row -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:13px;font-weight:700;color:var(--text-primary);">VN30 — Last 5Y Performance</span>
+              <span id="vn30-updated" style="font-size:10px;color:var(--text-muted);"></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <!-- Strategy sub-tabs -->
+              <div class="vn30-strat-btns">
+                <button class="vn30-strat-btn active" data-vstrategy="1">S1 Oversold</button>
+                <button class="vn30-strat-btn" data-vstrategy="2">S2 Momentum</button>
+              </div>
+              <button id="vn30-refresh-btn" class="vn30-refresh-btn" title="Re-download all VN30 prices">🔄 Refresh</button>
+            </div>
+          </div>
+
+          <!-- Ranking table -->
+          <div id="vn30-loading" style="text-align:center;padding:40px;display:none;">
+            <div style="font-size:24px;margin-bottom:8px;">⏳</div>
+            <div style="color:var(--text-muted);font-size:12px;">Computing 5Y backtest for 30 stocks…</div>
+          </div>
+          <table id="vn30-table" style="display:none;">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Stock</th>
+                <th>Last Price</th>
+                <th>Trades (5Y)</th>
+                <th>Win Rate</th>
+                <th>Avg P&amp;L/Trade</th>
+                <th>Avg Hold</th>
+                <th>Best Trade</th>
+                <th>Total Net P&amp;L</th>
+              </tr>
+            </thead>
+            <tbody id="vn30-table-body"></tbody>
+          </table>
+          <div id="vn30-empty" style="text-align:center;padding:40px;">
+            <div style="font-size:28px;margin-bottom:8px;">🏆</div>
+            <div style="color:var(--text-muted);font-size:12px;">Click a strategy above to load VN30 rankings</div>
+          </div>
+
+        </div>
+      </div>
+
     </section>
 
   </main>

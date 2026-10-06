@@ -54,6 +54,16 @@ const API = {
   searchTickers(q) {
     return apiFetch(`/api/stocks/search?q=${encodeURIComponent(q)}`);
   },
+
+  /** VN30 ranking: 5Y backtest for all 30 stocks */
+  getVn30Ranking(strategy = 1, forceRefresh = false) {
+    return apiFetch(`/api/vn30/ranking?strategy=${strategy}&refresh=${forceRefresh}`);
+  },
+
+  /** Trigger background re-download of all VN30 prices */
+  refreshVn30() {
+    return apiFetch("/api/vn30/refresh", { method: "POST" });
+  },
 };
 
 window.API = API;
