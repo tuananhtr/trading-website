@@ -521,7 +521,6 @@ function renderVn30Table(data) {
     }
 
     const avgPnl  = r.avg_net_pnl_pct ?? 0;
-    const totPnl  = r.total_net_pnl_pct ?? 0;
     const best    = r.best_trade_pct ?? 0;
     const wr      = r.win_rate_pct ?? 0;
     const hold    = r.avg_hold_days ?? 0;
@@ -541,7 +540,6 @@ function renderVn30Table(data) {
       <td style="color:${pnlClr(avgPnl)};font-weight:700;">${pnlFmt(avgPnl)}</td>
       <td style="text-align:center;color:var(--text-muted);">${hold.toFixed(0)}d</td>
       <td style="color:var(--green);">▲ ${Math.abs(best).toFixed(2)}%</td>
-      <td style="color:${pnlClr(totPnl)};">${pnlFmt(totPnl)}</td>
     </tr>`;
   }).join("");
 
