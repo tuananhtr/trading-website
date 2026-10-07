@@ -1,7 +1,7 @@
 /**
  * chart.js — TradingView Lightweight Charts integration.
  *
- * Architecture: single price chart (area line + MA200 + buy signals).
+ * Architecture: single price chart (candles + MA200 + buy signals).
  * MACD uses a second chart instance with logo hidden via CSS.
  */
 
@@ -15,15 +15,15 @@ let macdSignalSeries = null;
 
 const CHART_OPTIONS = {
   layout: {
-    background: { color: "#161d2a" },
-    textColor: "#64748b",
+    background: { color: "#0b0e11" },
+    textColor: "#8c94a1",
     fontSize: 11,
     fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
     attributionLogo: false,
   },
   grid: {
-    vertLines: { color: "rgba(31,45,61,0.5)" },
-    horzLines: { color: "rgba(31,45,61,0.5)" },
+    vertLines: { color: "rgba(42,46,57,0.52)" },
+    horzLines: { color: "rgba(42,46,57,0.52)" },
   },
   crosshair: {
     mode: 1,
@@ -31,11 +31,11 @@ const CHART_OPTIONS = {
     horzLine: { color: "rgba(100,116,139,0.4)", labelBackgroundColor: "#1c2536" },
   },
   rightPriceScale: {
-    borderColor: "rgba(31,45,61,0.8)",
+    borderColor: "rgba(42,46,57,0.9)",
     scaleMargins: { top: 0.06, bottom: 0.06 },
   },
   timeScale: {
-    borderColor: "rgba(31,45,61,0.8)",
+    borderColor: "rgba(42,46,57,0.9)",
     timeVisible: true,
     secondsVisible: false,
     rightOffset: 0,
@@ -67,18 +67,21 @@ function initCharts() {
     height: priceEl.clientHeight,
   });
 
-  // Area / line series
-  candleSeries = priceChart.addAreaSeries({
-    lineColor:        "#3b82f6",
-    topColor:         "rgba(59,130,246,0.18)",
-    bottomColor:      "rgba(59,130,246,0.00)",
-    lineWidth:        2,
+  // OHLC candles make the price view match a trading terminal and retain the
+  // same marker API used by the strategy signals.
+  candleSeries = priceChart.addCandlestickSeries({
+    upColor:           "#22ab94",
+    downColor:         "#f23645",
+    borderUpColor:     "#22ab94",
+    borderDownColor:   "#f23645",
+    wickUpColor:       "#22ab94",
+    wickDownColor:     "#f23645",
     priceLineVisible: false,
     lastValueVisible: true,
     crosshairMarkerVisible: true,
     crosshairMarkerRadius: 4,
-    crosshairMarkerBorderColor: "#3b82f6",
-    crosshairMarkerBackgroundColor: "#1e3a5f",
+    crosshairMarkerBorderColor: "#e9edf2",
+    crosshairMarkerBackgroundColor: "#161a20",
   });
 
   // MA200 dashed overlay
@@ -99,7 +102,7 @@ function initCharts() {
       height: macdEl.clientHeight,
       layout: { ...CHART_OPTIONS.layout, attributionLogo: false },
       rightPriceScale: {
-        borderColor:  "rgba(31,45,61,0.8)",
+        borderColor:  "rgba(42,46,57,0.9)",
         scaleMargins: { top: 0.1, bottom: 0.1 },
       },
       timeScale: { ...CHART_OPTIONS.timeScale, visible: false },
@@ -141,9 +144,11 @@ function updateCharts(data) {
 
   const { candles, ma200, signals } = data;
 
-  // Area series uses {time, value} (close price)
+  // Candlestick series uses full OHLC bars supplied by the API.
   if (candles && candles.length) {
-    candleSeries.setData(candles.map((c) => ({ time: c.time, value: c.close })));
+    candleSeries.setData(candles.map((c) => ({
+      time: c.time, open: c.open, high: c.high, low: c.low, close: c.close,
+    })));
   }
 
   if (ma200 && ma200.length) {

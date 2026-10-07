@@ -358,6 +358,39 @@ async def _startup():
     threading.Thread(target=_vn30_refresh_task, daemon=True).start()
 
 
+@app.get("/api/vn30/signals")
+def get_vn30_recent_signals(
+    strategy: int = Query(1, description="1=Oversold, 2=Momentum"),
+    days: int = Query(30, description="Look-back window in days"),
+):
+    """Return VN30 stocks that fired a buy signal within the last N days."""
+    cutoff = (pd.Timestamp.now() - pd.Timedelta(days=days)).date()
+    results = []
+
+    for ticker in VN30_TICKERS:
+        try:
+            df = get_or_fetch(ticker)
+            if df.empty or len(df) < 200:
+                continue
+            df_ind = compute_indicators(df, strategy=strategy)
+            bt = run_backtest(df_ind, ticker=ticker)
+            recent = [
+                t for t in bt.get("trades", [])
+                if pd.to_datetime(t["signal_date"]).date() >= cutoff
+            ]
+            results.extend(recent)
+        except Exception as exc:
+            logger.warning(f"VN30 signals [{ticker}]: {exc}")
+
+    results.sort(key=lambda x: x["signal_date"], reverse=True)
+    return {
+        "strategy": strategy,
+        "days": days,
+        "count": len(results),
+        "results": results,
+    }
+
+
 @app.get("/api/stocks/search")
 def search_tickers(q: str = Query("", min_length=0)):
     q = q.upper().strip()

@@ -3,271 +3,58 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VN Trading Dashboard</title>
+  <title>VN Market Terminal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 <div class="app">
-
-  <!-- ═══════════════════════════════════════════════════════════
-       TOP BAR — Watchlist + Search
-  ════════════════════════════════════════════════════════════════ -->
   <header class="top-bar">
-    <span class="watchlist-label">📋 Watchlist</span>
-    <div class="watchlist-pills" id="watchlist-pills">
-      <!-- Pills injected by app.js -->
+    <a class="brand" href="/" aria-label="VN Market Terminal"><span class="brand-mark">V</span><span>VN Market</span></a>
+    <div class="symbol-picker search-wrap">
+      <span class="control-label">Symbol</span><span class="search-icon">⌕</span>
+      <input type="text" class="search-input" id="search-input" placeholder="Search VN stocks" autocomplete="off" spellcheck="false" />
+      <div class="search-dropdown" id="search-dropdown"></div>
     </div>
-
-    <div class="search-row">
-      <div class="search-wrap">
-        <span class="search-icon">🔍</span>
-        <input
-          type="text"
-          class="search-input"
-          id="search-input"
-          placeholder="e.g. HPG, VNM…"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <div class="search-dropdown" id="search-dropdown"></div>
-      </div>
-      <button class="btn-add" id="btn-add">＋ Add</button>
-      <button class="btn-add" id="btn-refresh" title="Re-fetch data from yfinance" style="background:transparent;color:var(--text-muted);border-color:var(--border);">⟳ Refresh</button>
-    </div>
+    <label class="strategy-picker"><span class="control-label">Strategy</span><select id="strategy-select" aria-label="Select trading strategy"><option value="1">S1 · Oversold reversal</option><option value="2">S2 · MACD momentum</option></select></label>
+    <div class="toolbar-actions"><button class="toolbar-btn" id="btn-add" title="Add the entered ticker to your list">＋ Add symbol</button><button class="toolbar-btn icon-btn" id="btn-refresh" title="Refresh current market data">↻</button><span class="market-status"><i></i> Market data</span></div>
   </header>
 
-  <!-- ═══════════════════════════════════════════════════════════
-       MAIN CONTENT
-  ════════════════════════════════════════════════════════════════ -->
-  <main class="main-content">
-
-    <!-- Stock Header -->
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-      <div class="stock-header">
-        <span class="stock-ticker" id="stock-ticker">—</span>
-        <span class="stock-price" id="stock-price"></span>
-        <span class="stock-change" id="stock-change"></span>
-      </div>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <div class="signal-badge" id="signal-badge">
-          <span>0</span> buy signals
+  <div class="terminal-layout">
+    <main class="main-content">
+      <section class="chart-panel">
+        <div class="instrument-bar">
+          <div class="stock-header"><span class="exchange-tag">HOSE</span><span class="stock-ticker" id="stock-ticker">—</span><span class="stock-price" id="stock-price"></span><span class="stock-change" id="stock-change"></span></div>
+          <div class="instrument-meta"><span class="signal-badge" id="signal-badge"><span>0</span> buy signals</span><span id="strategy-desc">MA200 ↓ · RSI&lt;30 · MACD cross ↑</span></div>
         </div>
-        <div style="font-size:11px;color:var(--text-muted);">
-          Strategy: <span id="strategy-desc">MA200 ↓ &amp; RSI&lt;30 &amp; MACD cross ↑</span>
+        <div class="chart-controls">
+          <div class="legend"><div class="legend-item"><span class="legend-dot candle-dot"></span> Candles</div><div class="legend-item"><span class="legend-line"></span> MA 200</div><div class="legend-item"><span class="legend-dot signal-dot"></span> Buy signal</div></div>
+          <div class="period-btns" aria-label="Chart period"><button class="period-btn" data-period="1M">1M</button><button class="period-btn" data-period="3M">3M</button><button class="period-btn" data-period="6M">6M</button><button class="period-btn" data-period="1Y">1Y</button><button class="period-btn active" data-period="2Y">2Y</button><button class="period-btn" data-period="5Y">5Y</button><button class="period-btn" data-period="ALL">All</button></div>
         </div>
-      </div>
-    </div>
+        <div class="chart-wrapper"><div id="price-chart"></div><div id="macd-chart"></div><div class="chart-loading" id="chart-loading"><div class="spinner"></div><span>Loading market data…</span></div></div>
+      </section>
 
-    <!-- Chart Controls -->
-    <div class="chart-controls">
-      <div class="legend">
-        <div class="legend-item"><span class="legend-dot" style="background:#10b981"></span> Price</div>
-        <div class="legend-item"><span class="legend-dot" style="background:rgba(148,163,184,0.7)"></span> MA200</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span> Buy Signal</div>
-      </div>
-      <div class="period-btns">
-        <button class="period-btn" data-period="1M">1M</button>
-        <button class="period-btn" data-period="3M">3M</button>
-        <button class="period-btn" data-period="6M">6M</button>
-        <button class="period-btn" data-period="1Y">1Y</button>
-        <button class="period-btn active" data-period="2Y">2Y</button>
-        <button class="period-btn" data-period="5Y">5Y</button>
-        <button class="period-btn" data-period="ALL">ALL</button>
-      </div>
-      <!-- Strategy selector -->
-      <div class="strategy-btns">
-        <span class="strategy-label">Strategy:</span>
-        <button class="strategy-btn active" data-strategy="1" title="MA200 + RSI&lt;30 + MACD cross">S1 Oversold</button>
-        <button class="strategy-btn" data-strategy="2" title="MACD cross + MACD &gt; 0">S2 Momentum</button>
-      </div>
-    </div>
+      <section class="backtest-section">
+        <div class="section-header"><div class="section-title" id="backtest-title">Buy signals &amp; backtest — Last 2Y</div><div class="cut-loss-btns"><span>Risk control</span><button class="cl-btn none-btn active" data-cutloss="none">None</button><button class="cl-btn" data-cutloss="7">−7%</button><button class="cl-btn" data-cutloss="10">−10%</button><button class="cl-btn" data-cutloss="15">−15%</button></div></div>
+        <div class="summary-cards" id="summary-cards"><div class="empty-state">Select a stock to view backtest results</div></div>
+        <div class="tabs"><div class="tab active" data-panel="panel-trades">Trade details</div><div class="tab" data-panel="panel-info">Strategy rules</div></div>
+        <div class="tab-panel active" id="panel-trades"><div class="table-wrap"><table><thead><tr><th>Signal date</th><th>Stock</th><th>Indicator</th><th>Entry</th><th>Exit</th><th>Status</th><th>Days</th><th>Gross P&amp;L</th><th>Net P&amp;L</th></tr></thead><tbody id="signal-table-body"><tr><td colspan="9" class="empty-state">Select a stock to see buy signals.</td></tr></tbody></table></div></div>
+        <div class="tab-panel" id="panel-info"><div class="strategy-info"><div class="strategy-card"><h3>S1 · Long-term reversal</h3><p>Looks for a close below MA(200), an oversold RSI(14) below 30, then a bullish MACD crossover. This targets recoveries after deep corrections.</p><dl><dt>Entry</dt><dd>Open of the next bar after the signal</dd><dt>Exit</dt><dd>Current price or selected stop loss</dd></dl></div><div class="strategy-card"><h3>S2 · MACD momentum</h3><p>Looks for a bullish MACD crossover while the MACD remains above zero, filtering for momentum within an existing uptrend.</p><dl><dt>Entry</dt><dd>Open of the next bar after the signal</dd><dt>Fees</dt><dd>0.40% round trip: brokerage and securities tax</dd></dl></div></div></div>
+      </section>
+    </main>
 
-    <!-- Chart -->
-    <div class="chart-wrapper">
-      <div id="price-chart"></div>
-      <div id="macd-chart"></div>
-      <div class="chart-loading" id="chart-loading">
-        <div class="spinner"></div>
-        <span>Loading data…</span>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════
-         BACKTEST SECTION
-    ═════════════════════════════════════════════════════════════ -->
-    <section>
-      <div class="section-header">
-        <div class="section-title" id="backtest-title">Buy Signals &amp; Backtest — Last 2Y</div>
-        <div class="cut-loss-btns">
-          <span>✂ Cut Loss:</span>
-          <button class="cl-btn none-btn active" data-cutloss="none">None</button>
-          <button class="cl-btn" data-cutloss="7">7%</button>
-          <button class="cl-btn" data-cutloss="10">10%</button>
-          <button class="cl-btn" data-cutloss="15">15%</button>
-        </div>
-      </div>
-
-      <!-- Summary Cards -->
-      <div class="summary-cards" id="summary-cards">
-        <!-- Rendered by app.js -->
-        <div class="empty-state" style="grid-column:1/-1;">
-          <div class="icon">📊</div>
-          Select a stock to view backtest results
-        </div>
-      </div>
-
-      <!-- Tabs -->
-      <div class="tabs">
-        <div class="tab active" data-panel="panel-trades">Trade Details</div>
-        <div class="tab" data-panel="panel-info">Strategy Info</div>
-        <div class="tab" data-panel="panel-vn30">🏆 VN30 Ranking</div>
-      </div>
-
-      <!-- Tab: Trade Details -->
-      <div class="tab-panel active" id="panel-trades">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Signal Date</th>
-                <th>Stock</th>
-                <th>Indicator</th>
-                <th>Entry Price</th>
-                <th>Exit Price</th>
-                <th>Exit Status</th>
-                <th>Days</th>
-                <th>P&amp;L (Gross)</th>
-                <th>P&amp;L (Net)</th>
-              </tr>
-            </thead>
-            <tbody id="signal-table-body">
-              <tr>
-                <td colspan="9" class="empty-state">Select a stock from your watchlist to see buy signals.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Tab: Strategy Info -->
-      <div class="tab-panel" id="panel-info">
-        <div class="table-wrap" style="padding: 20px 24px; line-height: 2;">
-          <div style="color:var(--text-dim)">
-
-            <!-- Strategy 1 -->
-            <h3 style="color:var(--text-primary);margin-bottom:12px;font-size:14px;">📐 Strategy 1: Long-term Reversal (Oversold)</h3>
-            <div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:12px;">
-              <div style="color:var(--text-muted);font-weight:600;">Condition 1 — Trend</div>
-              <div>Close price <strong style="color:var(--amber)">below MA(200)</strong> — stock is in a long-term downtrend / deep dip</div>
-              <div style="color:var(--text-muted);font-weight:600;">Condition 2 — Oversold</div>
-              <div><strong style="color:var(--amber)">RSI(14) &lt; 30</strong> — stock is in oversold territory (within last 5 bars)</div>
-              <div style="color:var(--text-muted);font-weight:600;">Condition 3 — Confirmation</div>
-              <div>MACD(12,26,9) line <strong style="color:var(--green)">crosses above signal line</strong> — momentum turning bullish</div>
-              <div style="color:var(--text-muted);font-weight:600;">Use Case</div>
-              <div>Contrarian dip-buying — entering during deep corrections when price is cheap and momentum is recovering</div>
-              <div style="color:var(--text-muted);font-weight:600;">Entry</div>
-              <div>Open price of the <strong>next bar</strong> after signal bar</div>
-              <div style="color:var(--text-muted);font-weight:600;">Exit</div>
-              <div>Current date (open position marked-to-market) or cut-loss trigger</div>
-            </div>
-
-            <!-- Divider -->
-            <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:24px 0;">
-
-            <!-- Strategy 2 -->
-            <h3 style="color:var(--text-primary);margin-bottom:12px;font-size:14px;">⚡ Strategy 2: MACD Momentum Breakout</h3>
-            <div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:12px;">
-              <div style="color:var(--text-muted);font-weight:600;">Condition 1 — Momentum</div>
-              <div>MACD(12,26,9) line <strong style="color:var(--green)">crosses above signal line</strong> — short-term momentum turning bullish</div>
-              <div style="color:var(--text-muted);font-weight:600;">Condition 2 — Trend</div>
-              <div><strong style="color:var(--green)">MACD &gt; 0</strong> — momentum is in positive territory, confirming an overall uptrend</div>
-              <div style="color:var(--text-muted);font-weight:600;">Use Case</div>
-              <div>Trend-following — entering when the trend is already bullish and momentum re-accelerates upward</div>
-              <div style="color:var(--text-muted);font-weight:600;">Entry</div>
-              <div>Open price of the <strong>next bar</strong> after signal bar</div>
-              <div style="color:var(--text-muted);font-weight:600;">Exit</div>
-              <div>Current date (open position marked-to-market) or cut-loss trigger</div>
-            </div>
-
-            <!-- Divider -->
-            <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:24px 0;">
-
-            <!-- Shared info -->
-            <div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:12px;">
-              <div style="color:var(--text-muted);font-weight:600;">Fee Model</div>
-              <div>Buy: 0.15% | Sell: 0.15% + 0.10% tax = <strong style="color:var(--red)">~0.40% round-trip</strong></div>
-              <div style="color:var(--text-muted);font-weight:600;">Data Source</div>
-              <div>yfinance (.VN suffix) — stored locally in SQLite from 2010</div>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab: VN30 Ranking -->
-      <div class="tab-panel" id="panel-vn30">
-        <div class="table-wrap" style="padding:16px 20px;">
-
-          <!-- Header row -->
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <span style="font-size:13px;font-weight:700;color:var(--text-primary);">VN30 — Last 5Y Performance</span>
-              <span id="vn30-updated" style="font-size:10px;color:var(--text-muted);"></span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <!-- Strategy sub-tabs -->
-              <div class="vn30-strat-btns">
-                <button class="vn30-strat-btn active" data-vstrategy="1">S1 Oversold</button>
-                <button class="vn30-strat-btn" data-vstrategy="2">S2 Momentum</button>
-              </div>
-              <button id="vn30-refresh-btn" class="vn30-refresh-btn" title="Re-download all VN30 prices">🔄 Refresh</button>
-            </div>
-          </div>
-
-          <!-- Ranking table -->
-          <div id="vn30-loading" style="text-align:center;padding:40px;display:none;">
-            <div style="font-size:24px;margin-bottom:8px;">⏳</div>
-            <div style="color:var(--text-muted);font-size:12px;">Computing 5Y backtest for 30 stocks…</div>
-          </div>
-          <table id="vn30-table" style="display:none;">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Stock</th>
-                <th>Last Price</th>
-                <th>Trades (5Y)</th>
-                <th>Win Rate</th>
-                <th>Avg P&amp;L/Trade</th>
-                <th>Avg Hold</th>
-                <th>Best Trade</th>
-              </tr>
-            </thead>
-            <tbody id="vn30-table-body"></tbody>
-          </table>
-          <div id="vn30-empty" style="text-align:center;padding:40px;">
-            <div style="font-size:28px;margin-bottom:8px;">🏆</div>
-            <div style="color:var(--text-muted);font-size:12px;">Click a strategy above to load VN30 rankings</div>
-          </div>
-
-        </div>
-      </div>
-
-    </section>
-
-  </main>
+    <aside class="ranking-sidebar" aria-label="VN30 performance ranking">
+      <div class="ranking-header"><div><span class="eyebrow">Market scanner</span><h2>VN30 Ranking</h2></div><button id="vn30-refresh-btn" class="sidebar-icon-btn" title="Refresh VN30 prices">↻</button></div>
+      <div class="ranking-subheader"><span>5Y strategy performance</span><span id="vn30-updated"></span></div>
+      <div id="vn30-loading" class="ranking-loading"><div class="spinner"></div><span>Calculating performance…</span></div>
+      <div class="ranking-table-wrap"><table id="vn30-table" style="display:none;"><thead><tr><th>#</th><th>Symbol</th><th>Last</th><th>Avg P&amp;L</th><th>Win</th><th>Trades</th></tr></thead><tbody id="vn30-table-body"></tbody></table><div id="vn30-empty" class="ranking-empty"><span>◎</span><p>VN30 performance ranking will appear here.</p></div></div>
+      <div class="ranking-footer"><span class="performance-key positive"></span> Positive <span class="performance-key negative"></span> Negative</div>
+    </aside>
+  </div>
 </div>
-
-<!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
-
-<!-- TradingView Lightweight Charts v4 -->
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-
-<!-- App scripts -->
-<script src="js/api.js"></script>
-<script src="js/chart.js"></script>
-<script src="js/app.js"></script>
+<script src="js/api.js"></script><script src="js/chart.js"></script><script src="js/app.js"></script>
 </body>
 </html>

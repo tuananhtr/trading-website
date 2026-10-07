@@ -83,6 +83,8 @@ async function loadWatchlist() {
 
 function renderPills() {
   const container = dom.pillsContainer();
+  // The saved list is now used as the source for quick symbol loading.
+  // It deliberately has no visible pill tray in the terminal layout.
   if (!container) return;
   container.innerHTML = "";
 
@@ -442,18 +444,19 @@ const STRATEGY_DESC = {
 };
 
 function initStrategyButtons() {
-  document.querySelectorAll(".strategy-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const s = parseInt(btn.dataset.strategy, 10);
-      if (s === state.strategy) return;
-      state.strategy = s;
-      document.querySelectorAll(".strategy-btn").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      // Update description text
-      const descEl = document.getElementById("strategy-desc");
-      if (descEl) descEl.innerHTML = STRATEGY_DESC[s] || "";
-      if (state.activeTicker) loadStockData();
-    });
+  const select = document.getElementById("strategy-select");
+  if (!select) return;
+
+  select.value = String(state.strategy);
+  select.addEventListener("change", () => {
+    const s = parseInt(select.value, 10);
+    if (s === state.strategy) return;
+    state.strategy = s;
+    vn30Strategy = s;
+    const descEl = document.getElementById("strategy-desc");
+    if (descEl) descEl.innerHTML = STRATEGY_DESC[s] || "";
+    if (state.activeTicker) loadStockData();
+    loadVn30Ranking();
   });
 }
 
@@ -476,7 +479,7 @@ async function loadVn30Ranking(forceRefresh = false) {
     loading.style.display = "none";
     empty.style.display   = "block";
     empty.querySelector("div:last-child").textContent = "Error: " + err.message;
-    showToast("VN30 load failed: " + err.message, "error");
+    toast("VN30 load failed: " + err.message, "error");
   }
 }
 
@@ -514,9 +517,9 @@ function renderVn30Table(data) {
         ${rankCell}
         <td class="td-ticker">${r.ticker}</td>
         <td>${price}</td>
-        <td colspan="6" style="color:var(--text-muted);font-size:11px;">
-          ${r.status === "error" ? "⚠ Error fetching data" : "No signals in 5Y"}
-        </td>
+        <td style="color:var(--text-muted);">—</td>
+        <td>—</td>
+        <td>—</td>
       </tr>`;
     }
 
@@ -528,18 +531,13 @@ function renderVn30Table(data) {
     const pnlClr  = (v) => v >= 0 ? "var(--green)" : "var(--red)";
     const pnlFmt  = (v) => `${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(2)}%`;
 
-    // Medal for top 3
-    const medal = r.rank === 1 ? "🥇 " : r.rank === 2 ? "🥈 " : r.rank === 3 ? "🥉 " : "";
-
     return `<tr>
       ${rankCell}
-      <td class="td-ticker">${medal}${r.ticker}</td>
+      <td class="td-ticker">${r.ticker}</td>
       <td class="td-price">${price}</td>
-      <td style="text-align:center;">${r.total_trades}</td>
-      <td style="text-align:center;">${wr.toFixed(1)}%</td>
       <td style="color:${pnlClr(avgPnl)};font-weight:700;">${pnlFmt(avgPnl)}</td>
-      <td style="text-align:center;color:var(--text-muted);">${hold.toFixed(0)}d</td>
-      <td style="color:var(--green);">▲ ${Math.abs(best).toFixed(2)}%</td>
+      <td>${wr.toFixed(0)}%</td>
+      <td>${r.total_trades}</td>
     </tr>`;
   }).join("");
 
@@ -548,32 +546,19 @@ function renderVn30Table(data) {
 }
 
 function initVn30Tab() {
-  // Strategy sub-tabs inside VN30 panel
-  document.querySelectorAll(".vn30-strat-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const s = parseInt(btn.dataset.vstrategy, 10);
-      if (s === vn30Strategy) return;
-      vn30Strategy = s;
-      document.querySelectorAll(".vn30-strat-btn").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      loadVn30Ranking();
-    });
-  });
-
-  // Refresh button
   const refreshBtn = document.getElementById("vn30-refresh-btn");
   if (refreshBtn) {
     refreshBtn.addEventListener("click", async () => {
       refreshBtn.disabled = true;
       refreshBtn.textContent = "⏳ Refreshing…";
-      showToast("Downloading VN30 prices in background…", "info");
+      toast("Downloading VN30 prices in background…", "info");
       try {
         await API.refreshVn30();
-        showToast("VN30 data refresh started (takes ~2 min)", "success");
+        toast("VN30 data refresh started (takes ~2 min)", "success");
         // After a delay, reload ranking with fresh data
         setTimeout(() => loadVn30Ranking(true), 5000);
       } catch (e) {
-        showToast("Refresh failed: " + e.message, "error");
+        toast("Refresh failed: " + e.message, "error");
       } finally {
         setTimeout(() => {
           refreshBtn.disabled = false;
@@ -583,15 +568,8 @@ function initVn30Tab() {
     });
   }
 
-  // Auto-load when tab becomes active
-  const vn30Tab = document.querySelector('[data-panel="panel-vn30"]');
-  if (vn30Tab) {
-    vn30Tab.addEventListener("click", () => {
-      // Only load once (table will show cached result on re-click)
-      const table = document.getElementById("vn30-table");
-      if (table.style.display === "none") loadVn30Ranking();
-    });
-  }
+  // The ranking is a persistent right-hand market scanner, not a hidden tab.
+  loadVn30Ranking();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -605,10 +583,6 @@ async function init() {
   initRefreshButton();
   initTabs();
   await loadWatchlist();
-
-  // Trigger initial search dropdown
-  const res = await API.searchTickers("").catch(() => ({ results: [] }));
-  renderDropdown(res.results || []);
 }
 
 window.addEventListener("load", init);
