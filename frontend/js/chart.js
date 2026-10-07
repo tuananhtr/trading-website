@@ -171,7 +171,7 @@ function updateCharts(data) {
     markers.push(...(sell_signals || []).map((s) => ({
       time: s.time,
       position: "aboveBar",
-      color: "#ff4dff",
+      color: "#4da6ff",
       shape: "arrowDown",
       text: "SELL",
       size: 1.5,
