@@ -157,8 +157,8 @@ function updateCharts(data) {
     ma200Series.setData([]);
   }
 
-  // Signal markers appear on the confirmation bar; the trade table reports
-  // the next bar's execution date. All markers must be sorted by time.
+  // Buys show confirmation bars; sells show actual exit bars from the
+  // backtest, matching the performance table. Sort all markers by time.
   const markers = (signals || []).map((s) => ({
     time:     s.time,
     position: "belowBar",

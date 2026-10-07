@@ -16,8 +16,10 @@ async function apiFetch(path, opts = {}) {
 
 const API = {
   /** Get OHLCV + indicators for a ticker */
-  getStockData(ticker, period = "2Y", strategy = 1) {
-    return apiFetch(`/api/stocks/${ticker}/data?period=${period}&strategy=${strategy}`);
+  getStockData(ticker, period = "2Y", strategy = 1, cutLoss = null, allocation = 100000000) {
+    const params = new URLSearchParams({ period, strategy, allocation });
+    if (cutLoss != null) params.set("cut_loss", cutLoss);
+    return apiFetch(`/api/stocks/${ticker}/data?${params.toString()}`);
   },
 
   /** Get all buy signals */

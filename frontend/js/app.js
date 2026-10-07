@@ -180,7 +180,7 @@ async function loadStockData() {
 
   try {
     // Load chart data
-    const data = await API.getStockData(ticker, state.period, state.strategy);
+    const data = await API.getStockData(ticker, state.period, state.strategy, state.cutLoss, state.allocation);
     state.stockData = data;
     updateHeader(data);
     ChartManager.updateCharts(data);
@@ -362,7 +362,7 @@ function initCutLossButtons() {
       btn.classList.add("active");
       const val = btn.dataset.cutloss;
       state.cutLoss = val === "none" ? null : parseFloat(val);
-      if (state.activeTicker) loadBacktest(state.activeTicker);
+      if (state.activeTicker) loadStockData();
     });
   });
 }
@@ -380,7 +380,7 @@ function initAllocationInput() {
       return;
     }
     state.allocation = allocation;
-    if (state.activeTicker) loadBacktest(state.activeTicker);
+    if (state.activeTicker) loadStockData();
   });
 }
 

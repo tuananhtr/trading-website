@@ -6,8 +6,8 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from backtest import BUY_FEE, SELL_FEE, SELL_TAX, run_backtest
-from strategy import compute_indicators, detect_macd_cross_down, prepare_sell_signals
+from backtest import BUY_FEE, SELL_FEE, SELL_TAX, run_backtest, prepare_sell_signals
+from strategy import compute_indicators, detect_macd_cross_down
 
 
 class S2ExitTests(unittest.TestCase):
@@ -85,27 +85,62 @@ class S2ExitTests(unittest.TestCase):
         trade = run_backtest(frame, "TEST", strategy=1)["trades"][0]
         self.assertTrue(trade["is_active"])
 
-    def test_chart_sell_signal_precedes_execution_date(self):
+    def test_chart_sell_marker_matches_actual_execution_date(self):
         frame = self.bars()
         self.cross(frame)
-        frame["sell_signal"] = detect_macd_cross_down(frame)
-        signals = prepare_sell_signals(frame)
-        self.assertEqual(len(signals), 1)
-        self.assertEqual(signals[0]["time"], int(frame.index[203].timestamp()))
         trade = self.trade(frame)
+        signals = prepare_sell_signals([trade])
+        self.assertEqual(len(signals), 1)
+        self.assertEqual(signals[0]["time"], int(frame.index[204].timestamp()))
+        self.assertEqual(signals[0]["price"], trade["exit_price"])
         self.assertEqual(trade["exit_date"], frame.index[204].strftime("%Y-%m-%d"))
 
-    def test_final_bar_sell_signal_is_displayed_while_trade_is_active(self):
+    def test_final_bar_cross_has_no_sell_marker_until_executed(self):
         frame = self.bars()
         self.cross(frame, 209)
-        frame["sell_signal"] = detect_macd_cross_down(frame)
-        signals = prepare_sell_signals(frame)
-        self.assertEqual(signals[0]["time"], int(frame.index[-1].timestamp()))
-        self.assertTrue(self.trade(frame)["is_active"])
+        trade = self.trade(frame)
+        self.assertEqual(prepare_sell_signals([trade]), [])
+        self.assertTrue(trade["is_active"])
 
     def test_s1_has_no_sell_markers(self):
         frame = compute_indicators(self.bars(), strategy=1)
-        self.assertEqual(prepare_sell_signals(frame), [])
+        trades = run_backtest(frame, "TEST", strategy=1)["trades"]
+        self.assertEqual(prepare_sell_signals(trades), [])
+
+    def test_crosses_before_entry_and_after_exit_have_no_sell_markers(self):
+        frame = self.bars()
+        frame.loc[frame.index[190:195], "macd"] = 0.5
+        frame.loc[frame.index[203:205], "macd"] = 0.5
+        frame.loc[frame.index[207:], "macd"] = 0.5
+        self.assertEqual(int(detect_macd_cross_down(frame).sum()), 3)
+        trades = run_backtest(frame, "TEST", strategy=2)["trades"]
+        self.assertEqual(prepare_sell_signals(trades), [
+            {"time": int(frame.index[204].timestamp()), "price": trades[0]["exit_price"]},
+        ])
+
+    def test_sell_markers_require_an_executed_buy(self):
+        frame = self.bars()
+        frame["buy_signal"] = False
+        self.cross(frame)
+        trades = run_backtest(frame, "TEST", strategy=2)["trades"]
+        self.assertEqual(prepare_sell_signals(trades), [])
+
+    def test_simultaneous_positions_have_one_exit_marker(self):
+        frame = self.bars()
+        frame.loc[frame.index[201], "buy_signal"] = True
+        self.cross(frame)
+        trades = run_backtest(frame, "TEST", strategy=2)["trades"]
+        self.assertEqual(len(trades), 2)
+        self.assertEqual(len(prepare_sell_signals(trades)), 1)
+
+    def test_stop_exit_marker_replaces_later_macd_cross(self):
+        frame = self.bars()
+        self.cross(frame)
+        frame.loc[frame.index[202], "low"] = 17_000.0
+        trade = self.trade(frame, cut_loss_pct=0.1)
+        self.assertEqual(prepare_sell_signals([trade]), [
+            {"time": int(frame.index[202].timestamp()), "price": 18_000.0},
+        ])
 
 
 if __name__ == "__main__":

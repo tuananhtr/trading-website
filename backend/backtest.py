@@ -176,6 +176,21 @@ def run_backtest(
     return {"summary": summary, "trades": sorted(trades, key=lambda x: x["signal_date"], reverse=True)}
 
 
+def prepare_sell_signals(trades: list) -> list:
+    """One marker per executed exit bar, including stops, for actual positions.
+
+    Several independent buys may close together; display just one sell arrow
+    on that date. Active positions have valuation dates rather than exits.
+    """
+    markers = {}
+    for trade in trades:
+        if trade["is_active"]:
+            continue
+        time = int(pd.Timestamp(trade["exit_date"]).timestamp())
+        markers[time] = {"time": time, "price": trade["exit_price"]}
+    return [markers[time] for time in sorted(markers)]
+
+
 def _compute_summary(trades: list) -> dict:
     if not trades:
         return {

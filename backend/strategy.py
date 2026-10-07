@@ -105,17 +105,6 @@ def detect_macd_cross_down(df: pd.DataFrame) -> pd.Series:
     ).fillna(False)
 
 
-def prepare_sell_signals(df: pd.DataFrame) -> list:
-    """Chart markers belong to the signal bar; executions occur next bar."""
-    if "sell_signal" not in df.columns:
-        return []
-    return [
-        {"time": int(timestamp.timestamp()), "price": round(float(row["high"]), 2)}
-        for timestamp, row in df[df["sell_signal"]].iterrows()
-        if pd.notna(row["close"]) and row["close"] != 0
-    ]
-
-
 def _detect_buy_signals_s1(df: pd.DataFrame) -> pd.Series:
     """
     Strategy 1 — Oversold Reversal

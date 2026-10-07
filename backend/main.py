@@ -23,8 +23,8 @@ from database import (
     has_data,
 )
 from data_fetcher import fetch_and_store, incremental_update, get_or_fetch
-from strategy import compute_indicators, get_signals, prepare_chart_data, prepare_sell_signals
-from backtest import run_backtest
+from strategy import compute_indicators, get_signals, prepare_chart_data
+from backtest import run_backtest, prepare_sell_signals
 
 # ---------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
@@ -80,6 +80,8 @@ def get_stock_data(
     ticker: str,
     period: str = Query("2Y", description="1M|3M|6M|1Y|2Y|5Y|ALL"),
     strategy: int = Query(1, description="1=Oversold Reversal, 2=MACD Momentum"),
+    cut_loss: Optional[float] = Query(None, description="Stop-loss %, e.g. 7 for 7%"),
+    allocation: float = Query(100_000_000, gt=0, le=10_000_000_000, description="VND allocated independently to each signal"),
 ):
     """Return OHLCV + indicators formatted for the chart."""
     ticker = ticker.upper()
@@ -93,8 +95,16 @@ def get_stock_data(
 
     # Always return ALL candles so user can zoom out to see full history.
     candles, volumes, ma200, signals = prepare_chart_data(df, period_days=0)
-    # Include full-history sell signals too, so they remain visible on zoom out.
-    sell_signals = prepare_sell_signals(df)
+    # Chart sells come from executed trade exits using the same settings as
+    # the performance table, rather than every bearish indicator crossover.
+    sell_signals = []
+    if strategy == 2:
+        backtest = run_backtest(
+            df, ticker=ticker,
+            cut_loss_pct=cut_loss / 100 if cut_loss else None,
+            allocation_per_signal=allocation, strategy=strategy,
+        )
+        sell_signals = prepare_sell_signals(backtest["trades"])
 
     # Latest price info
     last_close = float(df["close"].iloc[-1]) if not df.empty else 0
