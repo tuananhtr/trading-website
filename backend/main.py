@@ -155,6 +155,7 @@ def get_backtest(
     cut_loss: Optional[float] = Query(None, description="Stop-loss %, e.g. 7 for 7%"),
     period: str = Query("ALL", description="Time period filter: 1M|3M|6M|1Y|2Y|5Y|ALL"),
     strategy: int = Query(1, description="1=Oversold Reversal, 2=MACD Momentum"),
+    allocation: float = Query(100_000_000, gt=0, le=10_000_000_000, description="VND allocated independently to each signal"),
 ):
     """Run backtest and return summary + detail tables, filtered to the selected period."""
     ticker = ticker.upper()
@@ -167,7 +168,12 @@ def get_backtest(
     df = compute_indicators(df, strategy=strategy)
 
     cut_loss_decimal = cut_loss / 100 if cut_loss else None
-    result = run_backtest(df, ticker=ticker, cut_loss_pct=cut_loss_decimal)
+    result = run_backtest(
+        df,
+        ticker=ticker,
+        cut_loss_pct=cut_loss_decimal,
+        allocation_per_signal=allocation,
+    )
 
     # Filter trades by signal_date AFTER backtest runs on full data
     period_days = PERIOD_MAP.get(period.upper(), 0)
@@ -181,6 +187,7 @@ def get_backtest(
         from backtest import _compute_summary
         result["summary"] = _compute_summary(result["trades"])
         result["summary"]["ticker"] = ticker
+        result["summary"]["allocation_per_signal_vnd"] = round(allocation, 0)
 
     # Buy-and-hold makes the strategy output interpretable in market context.
     # It is intentionally calculated over the same selected calendar window.

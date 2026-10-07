@@ -26,12 +26,14 @@ logger = logging.getLogger(__name__)
 BUY_FEE = 0.0015   # 0.15% on entry
 SELL_FEE = 0.0015  # 0.15% brokerage on exit
 SELL_TAX = 0.001   # 0.10% transfer tax on exit
+BOARD_LOT = 100     # HOSE/HNX standard board lot
 
 
 def run_backtest(
     df: pd.DataFrame,
     ticker: str,
     cut_loss_pct: Optional[float] = None,
+    allocation_per_signal: float = 100_000_000,
 ) -> dict:
     """
     Run backtest on *df* OHLCV data.
@@ -40,6 +42,9 @@ def run_backtest(
         df           : Full OHLCV DataFrame (DatetimeIndex)
         ticker       : Ticker symbol (display only)
         cut_loss_pct : Optional stop-loss threshold (e.g. 0.07 = 7% loss)
+        allocation_per_signal: Cash budget in VND for every buy signal. Each
+            signal receives this budget independently; available cash is not
+            shared or capped across concurrent signals.
 
     Returns a dict with:
         summary : dict of aggregate metrics
@@ -96,14 +101,25 @@ def run_backtest(
                     exit_reason = f"Stop-Loss ({cut_loss_pct*100:.0f}%)"
                     break
 
+        # Fixed-notional position sizing. Spend the same budget on every signal
+        # and round down to a tradable 100-share board lot, including the buy
+        # fee in the affordability check.
+        shares = int(allocation_per_signal / (entry_price * (1 + BUY_FEE)) / BOARD_LOT) * BOARD_LOT
+        if shares <= 0:
+            continue
+
+        entry_notional = shares * entry_price
+        entry_fee = entry_notional * BUY_FEE
+        invested_vnd = entry_notional + entry_fee
+        exit_notional = shares * exit_price
+        exit_fee_and_tax = exit_notional * (SELL_FEE + SELL_TAX)
+        exit_proceeds_vnd = exit_notional - exit_fee_and_tax
+        net_pnl_vnd = exit_proceeds_vnd - invested_vnd
+
         # Calculate returns
         days_held = (exit_date - entry_date).days
         gross_pct = (exit_price - entry_price) / entry_price  # decimal
-
-        # Net after fees and taxes
-        buy_cost = entry_price * BUY_FEE
-        sell_cost = exit_price * (SELL_FEE + SELL_TAX)
-        net_pct = ((exit_price - sell_cost) - (entry_price + buy_cost)) / (entry_price + buy_cost)
+        net_pct = net_pnl_vnd / invested_vnd
 
         trades.append({
             "signal_date": signal_date.strftime("%Y-%m-%d"),
@@ -118,7 +134,11 @@ def run_backtest(
             "gross_pnl_pct": round(gross_pct * 100, 2),
             "net_pnl_pct": round(net_pct * 100, 2),
             "gross_pnl_abs": round(exit_price - entry_price, 2),
-            "net_pnl_abs": round((exit_price - sell_cost) - (entry_price + buy_cost), 2),
+            "shares": shares,
+            "allocation_vnd": round(allocation_per_signal, 0),
+            "invested_vnd": round(invested_vnd, 0),
+            "net_pnl_vnd": round(net_pnl_vnd, 0),
+            "net_pnl_abs": round(net_pnl_vnd, 0),
         })
 
     # ---------- Summary ----------
@@ -129,6 +149,7 @@ def run_backtest(
         "sell_fee_pct": SELL_FEE * 100,
         "sell_tax_pct": SELL_TAX * 100,
     }
+    summary["allocation_per_signal_vnd"] = round(allocation_per_signal, 0)
 
     return {"summary": summary, "trades": sorted(trades, key=lambda x: x["signal_date"], reverse=True)}
 
@@ -147,11 +168,16 @@ def _compute_summary(trades: list) -> dict:
             "avg_net_pnl_pct": 0,
             "profitable_trades": 0,
             "losing_trades": 0,
+            "total_invested_vnd": 0,
+            "total_net_pnl_vnd": 0,
+            "return_on_deployed_pct": 0,
         }
 
     gross_pcts = [t["gross_pnl_pct"] for t in trades]
     net_pcts = [t["net_pnl_pct"] for t in trades]
     days = [t["days_held"] for t in trades]
+    invested = [t.get("invested_vnd", 0) for t in trades]
+    net_pnl_vnd = [t.get("net_pnl_vnd", 0) for t in trades]
     winners = [p for p in gross_pcts if p > 0]
     losers = [p for p in gross_pcts if p <= 0]
     net_winners = [p for p in net_pcts if p > 0]
@@ -167,6 +193,8 @@ def _compute_summary(trades: list) -> dict:
     gross_profit = sum(net_winners)
     gross_loss = abs(sum(net_losers))
     profit_factor = round(gross_profit / gross_loss, 2) if gross_loss else None
+    total_invested_vnd = sum(invested)
+    total_net_pnl_vnd = sum(net_pnl_vnd)
 
     return {
         "total_trades": total_trades,
@@ -185,4 +213,7 @@ def _compute_summary(trades: list) -> dict:
         "profit_factor": profit_factor,
         "active_trades": sum(1 for t in trades if t["is_active"]),
         "closed_trades": sum(1 for t in trades if not t["is_active"]),
+        "total_invested_vnd": round(total_invested_vnd, 0),
+        "total_net_pnl_vnd": round(total_net_pnl_vnd, 0),
+        "return_on_deployed_pct": round(total_net_pnl_vnd / total_invested_vnd * 100, 2) if total_invested_vnd else 0,
     }

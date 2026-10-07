@@ -10,6 +10,7 @@ const state = {
   period: "2Y",
   strategy: 1,       // 1 = Oversold Reversal, 2 = MACD Momentum
   cutLoss: null,
+  allocation: 100000000,
   loading: false,
   backtestData: null,
   stockData: null,
@@ -31,6 +32,7 @@ const dom = {
   backtest2Y: () => document.getElementById("backtest-period-label"),
   toastContainer: () => document.getElementById("toast-container"),
   refreshBtn: () => document.getElementById("btn-refresh"),
+  allocationInput: () => document.getElementById("allocation-input"),
 };
 
 // ─── Toast ───────────────────────────────────────────────────────────────────
@@ -54,6 +56,11 @@ function fmtPct(n) {
   return `${sign}${Number(n).toFixed(2)}%`;
 }
 
+function fmtVnd(n) {
+  if (n == null || isNaN(n)) return "—";
+  return `${n < 0 ? "−" : ""}₫${Math.abs(Number(n)).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
 function pnlClass(n) {
   if (n > 0) return "pnl-pos";
   if (n < 0) return "pnl-neg";
@@ -64,6 +71,13 @@ function pnlSpan(n) {
   const cls = pnlClass(n);
   const prefix = n > 0 ? "▲ +" : n < 0 ? "▼ " : "";
   return `<span class="${cls}">${prefix}${Math.abs(Number(n)).toFixed(2)}%</span>`;
+}
+
+function pnlVndSpan(n) {
+  const cls = pnlClass(n);
+  const prefix = n > 0 ? "▲ +" : n < 0 ? "▼ " : "";
+  const amount = Math.abs(Number(n ?? 0)).toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return `<span class="${cls}">${prefix}₫${amount}</span>`;
 }
 
 // ─── Watchlist ────────────────────────────────────────────────────────────────
@@ -185,7 +199,7 @@ async function loadStockData() {
 
 async function loadBacktest(ticker) {
   try {
-    const data = await API.getBacktest(ticker, state.cutLoss, state.period, state.strategy);
+    const data = await API.getBacktest(ticker, state.cutLoss, state.period, state.strategy, state.allocation);
     state.backtestData = data;
     renderSummaryCards(data.summary);
     renderSignalTable(data.trades);
@@ -245,18 +259,20 @@ function renderSummaryCards(s) {
     return;
   }
 
-  const signalPnl = s.total_net_pnl_pct ?? 0;
+  const netPnlVnd = s.total_net_pnl_vnd ?? 0;
+  const deployedCapital = s.total_invested_vnd ?? 0;
+  const returnOnDeployed = s.return_on_deployed_pct ?? 0;
   const benchmarkReturn = s.benchmark_return_pct ?? 0;
   const benchmarkCagr = s.benchmark_cagr_pct ?? 0;
   const benchmarkDrawdown = s.benchmark_max_drawdown_pct ?? 0;
   const profitFactor = s.profit_factor == null ? "—" : s.profit_factor.toFixed(2);
 
   const cards = [
-    { label: "Net P&L (MTM)*",       value: fmtPct(signalPnl),             sub: "Open signals valued at close", cls: signalPnl >= 0 ? "pos" : "neg" },
-    { label: "Buy & Hold",           value: fmtPct(benchmarkReturn),        sub: "Same selected period",       cls: benchmarkReturn >= 0 ? "pos" : "neg" },
-    { label: "Buy & Hold CAGR",      value: fmtPct(benchmarkCagr),          sub: "Annualised benchmark",       cls: benchmarkCagr >= 0 ? "pos" : "neg" },
-    { label: "Benchmark Max DD",     value: fmtPct(benchmarkDrawdown),      sub: "Peak-to-trough decline",     cls: benchmarkDrawdown < 0 ? "neg" : "" },
-    { label: "Median Signal P&L",    value: fmtPct(s.median_net_pnl_pct),   sub: "More robust than average",   cls: (s.median_net_pnl_pct ?? 0) >= 0 ? "pos" : "neg" },
+    { label: "Net P&L (MTM)",        value: fmtVnd(netPnlVnd),              sub: "Open signals valued at close", cls: netPnlVnd >= 0 ? "pos" : "neg" },
+    { label: "Return on Capital",    value: fmtPct(returnOnDeployed),       sub: "Net P&L / capital deployed", cls: returnOnDeployed >= 0 ? "pos" : "neg" },
+    { label: "Capital Deployed",     value: fmtVnd(deployedCapital),        sub: `${fmtVnd(s.allocation_per_signal_vnd)} per signal`, cls: "" },
+    { label: "Buy & Hold",           value: fmtPct(benchmarkReturn),        sub: "Same selected period",         cls: benchmarkReturn >= 0 ? "pos" : "neg" },
+    { label: "Benchmark Max DD",     value: fmtPct(benchmarkDrawdown),      sub: "Peak-to-trough decline",       cls: benchmarkDrawdown < 0 ? "neg" : "" },
     { label: "Profit Factor",        value: profitFactor,                   sub: s.profit_factor == null ? "No losing signals yet" : "Gross wins / gross losses", cls: s.profit_factor == null || s.profit_factor >= 1 ? "pos" : "neg" },
   ];
 
@@ -281,7 +297,7 @@ function renderSummaryCards(s) {
       <span>Median hold <strong>${s.median_hold_days ?? 0}d</strong></span>
       <span>Window: ${s.benchmark_start_date ?? "—"} → ${s.benchmark_end_date ?? "—"}</span>
       ${sampleWarning}
-      <span class="performance-disclaimer">* Includes realized net P&amp;L plus open signals marked to the latest closing price; overlapping signals are not compounded into a portfolio return.</span>`;
+      <span class="performance-disclaimer">Each signal receives ${fmtVnd(s.allocation_per_signal_vnd)} independently (100-share lots). Net P&amp;L includes closed outcomes and active positions marked to the latest close.</span>`;
   }
 }
 
@@ -291,7 +307,7 @@ function renderSignalTable(trades) {
   if (!tbody) return;
 
   if (!trades || !trades.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No buy signals found for this ticker with the current strategy.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="empty-state">No buy signals found for this ticker with the current strategy.</td></tr>`;
     return;
   }
 
@@ -314,10 +330,12 @@ function renderSignalTable(trades) {
         <td><span class="badge badge-signal">${state.strategy === 2 ? "MACD>0+Cross" : "MA200+RSI+MACD"}</span></td>
         <td class="td-price">${fmt(t.entry_price)}</td>
         <td>${exitPrice}</td>
+        <td class="td-price">${(t.shares ?? 0).toLocaleString("en-US")}</td>
         <td>${exitBadge}</td>
         <td class="td-days">${t.days_held}d</td>
         <td>${pnlSpan(t.gross_pnl_pct)}</td>
         <td>${pnlSpan(t.net_pnl_pct)}</td>
+        <td>${pnlVndSpan(t.net_pnl_vnd)}</td>
       </tr>`;
     })
     .join("");
@@ -345,6 +363,23 @@ function initCutLossButtons() {
       state.cutLoss = val === "none" ? null : parseFloat(val);
       if (state.activeTicker) loadBacktest(state.activeTicker);
     });
+  });
+}
+
+function initAllocationInput() {
+  const input = dom.allocationInput();
+  if (!input) return;
+
+  input.value = state.allocation;
+  input.addEventListener("change", () => {
+    const allocation = Number(input.value);
+    if (!Number.isFinite(allocation) || allocation < 100000) {
+      input.value = state.allocation;
+      toast("Capital per signal must be at least ₫100,000", "error");
+      return;
+    }
+    state.allocation = allocation;
+    if (state.activeTicker) loadBacktest(state.activeTicker);
   });
 }
 
@@ -595,6 +630,7 @@ async function init() {
   ChartManager.initCharts();
   initPeriodButtons();
   initCutLossButtons();
+  initAllocationInput();
   initStrategyButtons();
   initVn30Tab();
   initSearch();

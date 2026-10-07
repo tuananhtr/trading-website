@@ -26,11 +26,12 @@ const API = {
   },
 
   /** Run backtest, optionally filtered to a time period */
-  getBacktest(ticker, cutLoss = null, period = "ALL", strategy = 1) {
+  getBacktest(ticker, cutLoss = null, period = "ALL", strategy = 1, allocation = 100000000) {
     const params = new URLSearchParams();
     if (cutLoss != null) params.set("cut_loss", cutLoss);
     if (period)          params.set("period", period);
     params.set("strategy", strategy);
+    params.set("allocation", allocation);
     return apiFetch(`/api/stocks/${ticker}/backtest?${params.toString()}`);
   },
 
