@@ -65,7 +65,7 @@ def compute_indicators(df: pd.DataFrame, strategy: int = 1) -> pd.DataFrame:
 
     Input:  DataFrame with columns [open, high, low, close, volume], DatetimeIndex.
     Output: Same df with extra columns:
-            ma200, rsi, macd, macd_signal, macd_hist, buy_signal
+            ma200, rsi, macd, macd_signal, macd_hist, buy_signal, sell_signal
     strategy: 1 = MA200 + RSI<30 + MACD cross (oversold reversal)
               2 = MACD cross + MACD > 0 (momentum breakout)
     """
@@ -77,6 +77,7 @@ def compute_indicators(df: pd.DataFrame, strategy: int = 1) -> pd.DataFrame:
         df["macd_signal"] = np.nan
         df["macd_hist"]   = np.nan
         df["buy_signal"]  = False
+        df["sell_signal"] = False
         return df
 
     df = df.copy()
@@ -91,7 +92,28 @@ def compute_indicators(df: pd.DataFrame, strategy: int = 1) -> pd.DataFrame:
     else:
         df["buy_signal"] = _detect_buy_signals_s1(df)
 
+    df["sell_signal"] = detect_macd_cross_down(df) if strategy == 2 else False
+
     return df
+
+
+def detect_macd_cross_down(df: pd.DataFrame) -> pd.Series:
+    """S2 sell signal, confirmed when MACD crosses below its signal at close."""
+    return (
+        (df["macd"] < df["macd_signal"])
+        & (df["macd"].shift(1) >= df["macd_signal"].shift(1))
+    ).fillna(False)
+
+
+def prepare_sell_signals(df: pd.DataFrame) -> list:
+    """Chart markers belong to the signal bar; executions occur next bar."""
+    if "sell_signal" not in df.columns:
+        return []
+    return [
+        {"time": int(timestamp.timestamp()), "price": round(float(row["high"]), 2)}
+        for timestamp, row in df[df["sell_signal"]].iterrows()
+        if pd.notna(row["close"]) and row["close"] != 0
+    ]
 
 
 def _detect_buy_signals_s1(df: pd.DataFrame) -> pd.Series:

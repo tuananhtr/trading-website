@@ -23,7 +23,7 @@ from database import (
     has_data,
 )
 from data_fetcher import fetch_and_store, incremental_update, get_or_fetch
-from strategy import compute_indicators, get_signals, prepare_chart_data
+from strategy import compute_indicators, get_signals, prepare_chart_data, prepare_sell_signals
 from backtest import run_backtest
 
 # ---------------------------------------------------------------------------
@@ -92,10 +92,9 @@ def get_stock_data(
     df = compute_indicators(df, strategy=strategy)
 
     # Always return ALL candles so user can zoom out to see full history.
-    candles, volumes, ma200, _ = prepare_chart_data(df, period_days=0)
-
-    # Return ALL signals across full history so they appear when user zooms out.
-    _, _, _, signals = prepare_chart_data(df, period_days=0)
+    candles, volumes, ma200, signals = prepare_chart_data(df, period_days=0)
+    # Include full-history sell signals too, so they remain visible on zoom out.
+    sell_signals = prepare_sell_signals(df)
 
     # Latest price info
     last_close = float(df["close"].iloc[-1]) if not df.empty else 0
@@ -116,6 +115,7 @@ def get_stock_data(
         "volumes": volumes,
         "ma200": ma200,
         "signals": signals,
+        "sell_signals": sell_signals,
         "strategy": strategy,
         "period": period,
         "period_from_ts": period_from_ts,

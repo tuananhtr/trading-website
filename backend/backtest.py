@@ -19,7 +19,7 @@ from typing import Optional
 
 import pandas as pd
 
-from strategy import compute_indicators
+from strategy import compute_indicators, detect_macd_cross_down
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +68,7 @@ def run_backtest(
 
     if strategy == 2:
         # A cross must occur on this bar, rather than MACD merely staying below.
-        df["macd_cross_down"] = (
-            (df["macd"] < df["macd_signal"])
-            & (df["macd"].shift(1) >= df["macd_signal"].shift(1))
-        ).fillna(False)
+        df["macd_cross_down"] = detect_macd_cross_down(df)
 
     today_price = float(df["close"].iloc[-1])
     today_date = df["date"].iloc[-1].date()

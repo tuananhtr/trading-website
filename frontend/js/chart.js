@@ -1,7 +1,7 @@
 /**
  * chart.js — TradingView Lightweight Charts integration.
  *
- * Architecture: single price chart (candles + MA200 + buy signals).
+ * Architecture: single price chart (candles + MA200 + buy/sell signals).
  * MACD uses a second chart instance with logo hidden via CSS.
  */
 
@@ -142,7 +142,7 @@ function initCharts() {
 function updateCharts(data) {
   if (!priceChart || !data) return;
 
-  const { candles, ma200, signals } = data;
+  const { candles, ma200, signals, sell_signals } = data;
 
   // Candlestick series uses full OHLC bars supplied by the API.
   if (candles && candles.length) {
@@ -157,7 +157,8 @@ function updateCharts(data) {
     ma200Series.setData([]);
   }
 
-  // Buy signal markers
+  // Signal markers appear on the confirmation bar; the trade table reports
+  // the next bar's execution date. All markers must be sorted by time.
   const markers = (signals || []).map((s) => ({
     time:     s.time,
     position: "belowBar",
@@ -166,7 +167,21 @@ function updateCharts(data) {
     text:     "BUY",
     size:     1.5,
   }));
+  if (data.strategy === 2) {
+    markers.push(...(sell_signals || []).map((s) => ({
+      time: s.time,
+      position: "aboveBar",
+      color: "#f23645",
+      shape: "arrowDown",
+      text: "SELL",
+      size: 1.5,
+    })));
+  }
+  markers.sort((a, b) => a.time - b.time);
   candleSeries.setMarkers(markers);
+
+  const sellLegend = document.getElementById("sell-signal-legend");
+  if (sellLegend) sellLegend.hidden = data.strategy !== 2;
 
   // Set initial visible range to the selected period.
   // Right boundary = last candle + 3 days (avoids large empty gap on the right).

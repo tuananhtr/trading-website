@@ -1,4 +1,6 @@
 /* Trading-terminal visual system */
+.legend-item[hidden] { display:none !important; }
+.sell-dot { background:#f23645; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root { --bg:#0b0e11; --panel:#111417; --panel-raised:#151a1f; --panel-hover:#1a2027; --border:#2a2e39; --border-subtle:#20242d; --text:#d7dbe2; --text-dim:#9298a5; --muted:#676e7b; --green:#22ab94; --red:#f23645; --blue:#2962ff; --amber:#f0a429; --radius:4px; --font:'Inter','Segoe UI',system-ui,sans-serif; --chart-height:440px; }
 html, body { min-height:100%; background:var(--bg); color:var(--text); font:12px/1.45 var(--font); }

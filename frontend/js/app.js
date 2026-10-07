@@ -307,7 +307,7 @@ function renderSignalTable(trades) {
   if (!tbody) return;
 
   if (!trades || !trades.length) {
-    tbody.innerHTML = `<tr><td colspan="11" class="empty-state">No buy signals found for this ticker with the current strategy.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="empty-state">No buy signals found for this ticker with the current strategy.</td></tr>`;
     return;
   }
 
@@ -330,6 +330,7 @@ function renderSignalTable(trades) {
         <td><span class="badge badge-signal">${state.strategy === 2 ? "MACD>0+Cross" : "MA200+RSI+MACD"}</span></td>
         <td class="td-price">${fmt(t.entry_price)}</td>
         <td>${exitPrice}</td>
+        <td class="td-date" title="${t.is_active ? `Open position; last valued on ${t.exit_date}` : "Date the sell was executed"}">${t.is_active ? "—" : t.exit_date}</td>
         <td class="td-price">${(t.shares ?? 0).toLocaleString("en-US")}</td>
         <td>${exitBadge}</td>
         <td class="td-days">${t.days_held}d</td>
