@@ -252,7 +252,7 @@ function renderSummaryCards(s) {
   const profitFactor = s.profit_factor == null ? "—" : s.profit_factor.toFixed(2);
 
   const cards = [
-    { label: "Signal P&L*",          value: fmtPct(signalPnl),             sub: "Aggregate, not a portfolio", cls: signalPnl >= 0 ? "pos" : "neg" },
+    { label: "Net P&L (MTM)*",       value: fmtPct(signalPnl),             sub: "Open signals valued at close", cls: signalPnl >= 0 ? "pos" : "neg" },
     { label: "Buy & Hold",           value: fmtPct(benchmarkReturn),        sub: "Same selected period",       cls: benchmarkReturn >= 0 ? "pos" : "neg" },
     { label: "Buy & Hold CAGR",      value: fmtPct(benchmarkCagr),          sub: "Annualised benchmark",       cls: benchmarkCagr >= 0 ? "pos" : "neg" },
     { label: "Benchmark Max DD",     value: fmtPct(benchmarkDrawdown),      sub: "Peak-to-trough decline",     cls: benchmarkDrawdown < 0 ? "neg" : "" },
@@ -281,7 +281,7 @@ function renderSummaryCards(s) {
       <span>Median hold <strong>${s.median_hold_days ?? 0}d</strong></span>
       <span>Window: ${s.benchmark_start_date ?? "—"} → ${s.benchmark_end_date ?? "—"}</span>
       ${sampleWarning}
-      <span class="performance-disclaimer">* Overlapping signals are not compounded into a portfolio return.</span>`;
+      <span class="performance-disclaimer">* Includes realized net P&amp;L plus open signals marked to the latest closing price; overlapping signals are not compounded into a portfolio return.</span>`;
   }
 }
 
