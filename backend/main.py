@@ -173,6 +173,7 @@ def get_backtest(
         ticker=ticker,
         cut_loss_pct=cut_loss_decimal,
         allocation_per_signal=allocation,
+        strategy=strategy,
     )
 
     # Filter trades by signal_date AFTER backtest runs on full data
@@ -309,7 +310,7 @@ def get_vn30_ranking(
                 continue
 
             df_ind = compute_indicators(df, strategy=strategy)
-            bt = run_backtest(df_ind, ticker=ticker)
+            bt = run_backtest(df_ind, ticker=ticker, strategy=strategy)
 
             # Filter trades to last 5 years
             trades_5y = [
@@ -401,7 +402,7 @@ def get_vn30_recent_signals(
             if df.empty or len(df) < 200:
                 continue
             df_ind = compute_indicators(df, strategy=strategy)
-            bt = run_backtest(df_ind, ticker=ticker)
+            bt = run_backtest(df_ind, ticker=ticker, strategy=strategy)
             recent = [
                 t for t in bt.get("trades", [])
                 if pd.to_datetime(t["signal_date"]).date() >= cutoff

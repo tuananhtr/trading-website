@@ -3,8 +3,9 @@ backtest.py - Backtesting engine for the MA200 + RSI + MACD strategy.
 
 Trade rules:
   - Entry: Open price of the bar AFTER the buy signal bar
-  - Exit:  Today's last close price (open position) OR
-           when another condition triggers (future extension)
+  - S1 exit: Latest close for active positions, or selected stop loss
+  - S2 exit: MACD crosses below its signal line; sell at next bar's open,
+             or selected stop loss if reached first
   - Tax / Fee model (Vietnam):
       Buy-side:  0.15% brokerage fee
       Sell-side: 0.15% brokerage fee + 0.1% securities transfer tax
@@ -34,6 +35,7 @@ def run_backtest(
     ticker: str,
     cut_loss_pct: Optional[float] = None,
     allocation_per_signal: float = 100_000_000,
+    strategy: int = 1,
 ) -> dict:
     """
     Run backtest on *df* OHLCV data.
@@ -45,6 +47,7 @@ def run_backtest(
         allocation_per_signal: Cash budget in VND for every buy signal. Each
             signal receives this budget independently; available cash is not
             shared or capped across concurrent signals.
+        strategy     : 1 = Oversold reversal; 2 = MACD momentum with cross-down exit
 
     Returns a dict with:
         summary : dict of aggregate metrics
@@ -54,12 +57,21 @@ def run_backtest(
         return {"summary": {}, "trades": []}
 
     # Compute indicators if not already done
-    if "buy_signal" not in df.columns:
-        df = compute_indicators(df)
+    if "buy_signal" not in df.columns or (
+        strategy == 2 and not {"macd", "macd_signal"}.issubset(df.columns)
+    ):
+        df = compute_indicators(df, strategy=strategy)
 
     df = df.copy()
     df = df.reset_index()
     df["date"] = pd.to_datetime(df["date"])
+
+    if strategy == 2:
+        # A cross must occur on this bar, rather than MACD merely staying below.
+        df["macd_cross_down"] = (
+            (df["macd"] < df["macd_signal"])
+            & (df["macd"].shift(1) >= df["macd_signal"].shift(1))
+        ).fillna(False)
 
     today_price = float(df["close"].iloc[-1])
     today_date = df["date"].iloc[-1].date()
@@ -88,17 +100,30 @@ def run_backtest(
         is_active = True
         exit_reason = "Active"
 
-        # Apply stop-loss if configured
-        if cut_loss_pct is not None:
-            sl_price = entry_price * (1 - cut_loss_pct)
-            # Scan forward from entry for stop-loss breach
-            for j in range(i + 2, len(df)):
+        # Walk chronologically so a stop loss cannot override an earlier MACD
+        # exit. S2 also checks the entry bar's close for a bearish crossover.
+        if cut_loss_pct is not None or strategy == 2:
+            sl_price = entry_price * (1 - cut_loss_pct) if cut_loss_pct is not None else None
+            scan_start = i + 1 if strategy == 2 else i + 2
+            for j in range(scan_start, len(df)):
                 future_row = df.iloc[j]
-                if float(future_row["low"]) <= sl_price:
+                # An intrabar stop precedes a crossover confirmed at the close.
+                if sl_price is not None and float(future_row["low"]) <= sl_price:
                     exit_price = sl_price  # Assume filled at SL
                     exit_date = future_row["date"].date()
                     is_active = False
                     exit_reason = f"Stop-Loss ({cut_loss_pct*100:.0f}%)"
+                    break
+
+                if strategy == 2 and future_row["macd_cross_down"] and j + 1 < len(df):
+                    # The crossover is known at the close. Fill at the next open
+                    # (same timing convention as entries); a final-bar cross
+                    # remains active until an execution bar exists.
+                    exit_row = df.iloc[j + 1]
+                    exit_price = float(exit_row["open"])
+                    exit_date = exit_row["date"].date()
+                    is_active = False
+                    exit_reason = "MACD Cross Down"
                     break
 
         # Fixed-notional position sizing. Spend the same budget on every signal

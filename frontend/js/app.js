@@ -317,7 +317,7 @@ function renderSignalTable(trades) {
         ? '<span class="badge badge-active">Active</span>'
         : t.exit_reason.includes("Stop")
         ? `<span class="badge badge-stoploss">${t.exit_reason}</span>`
-        : '<span class="badge badge-closed">Closed</span>';
+        : `<span class="badge badge-closed" title="Exit date: ${t.exit_date}">${t.exit_reason === "MACD Cross Down" ? "MACD cross ↓" : "Closed"}</span>`;
 
       const exitPrice = t.is_active
         ? `<span style="color:var(--text-muted);font-style:italic">${fmt(t.exit_price)}</span>`
@@ -493,7 +493,7 @@ function initTabs() {
 // ─── Strategy Buttons ─────────────────────────────────────────────────────────
 const STRATEGY_DESC = {
   1: "MA200 ↓ & RSI&lt;30 & MACD cross ↑",
-  2: "MACD cross ↑ & MACD &gt; 0",
+  2: "Entry: MACD cross ↑ & MACD &gt; 0 · Exit: MACD cross ↓",
 };
 
 function initStrategyButtons() {
