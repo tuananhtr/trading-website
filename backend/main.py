@@ -182,6 +182,27 @@ def get_backtest(
         result["summary"] = _compute_summary(result["trades"])
         result["summary"]["ticker"] = ticker
 
+    # Buy-and-hold makes the strategy output interpretable in market context.
+    # It is intentionally calculated over the same selected calendar window.
+    window_df = df
+    if period_days > 0:
+        window_df = df[df.index >= pd.Timestamp(cutoff)]
+    if len(window_df) >= 2:
+        start_close = float(window_df["close"].iloc[0])
+        end_close = float(window_df["close"].iloc[-1])
+        benchmark_return = ((end_close / start_close) - 1) * 100 if start_close else 0
+        elapsed_years = max((window_df.index[-1] - window_df.index[0]).days / 365.25, 0)
+        benchmark_cagr = ((end_close / start_close) ** (1 / elapsed_years) - 1) * 100 if elapsed_years and start_close else 0
+        equity = window_df["close"] / start_close
+        benchmark_drawdown = ((equity / equity.cummax()) - 1).min() * 100
+        result["summary"].update({
+            "benchmark_return_pct": round(benchmark_return, 2),
+            "benchmark_cagr_pct": round(benchmark_cagr, 2),
+            "benchmark_max_drawdown_pct": round(float(benchmark_drawdown), 2),
+            "benchmark_start_date": window_df.index[0].strftime("%Y-%m-%d"),
+            "benchmark_end_date": window_df.index[-1].strftime("%Y-%m-%d"),
+        })
+
     result["period"] = period
     result["strategy"] = strategy
     return result

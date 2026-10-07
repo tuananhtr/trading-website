@@ -154,12 +154,19 @@ def _compute_summary(trades: list) -> dict:
     days = [t["days_held"] for t in trades]
     winners = [p for p in gross_pcts if p > 0]
     losers = [p for p in gross_pcts if p <= 0]
+    net_winners = [p for p in net_pcts if p > 0]
+    net_losers = [p for p in net_pcts if p <= 0]
 
     total_trades = len(trades)
 
-    # Simple total return (sum of all trade P&Ls — not compounded)
+    # These are signal-level aggregates, not a portfolio simulation: multiple
+    # signals can be open at once. Keep the values for analysis, but the UI
+    # must not present them as investable compounded portfolio return.
     total_gross_pct = sum(gross_pcts)
     total_net_pct   = sum(net_pcts)
+    gross_profit = sum(net_winners)
+    gross_loss = abs(sum(net_losers))
+    profit_factor = round(gross_profit / gross_loss, 2) if gross_loss else None
 
     return {
         "total_trades": total_trades,
@@ -173,4 +180,9 @@ def _compute_summary(trades: list) -> dict:
         "best_trade_pct": round(max(gross_pcts), 2),
         "worst_trade_pct": round(min(gross_pcts), 2),
         "avg_hold_days": round(sum(days) / total_trades, 1) if total_trades else 0,
+        "median_hold_days": round(float(pd.Series(days).median()), 1) if days else 0,
+        "median_net_pnl_pct": round(float(pd.Series(net_pcts).median()), 2) if net_pcts else 0,
+        "profit_factor": profit_factor,
+        "active_trades": sum(1 for t in trades if t["is_active"]),
+        "closed_trades": sum(1 for t in trades if not t["is_active"]),
     }

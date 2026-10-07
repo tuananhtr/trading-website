@@ -26,6 +26,7 @@ const dom = {
   signalBadge: () => document.getElementById("signal-badge"),
   chartLoading: () => document.getElementById("chart-loading"),
   summaryCards: () => document.getElementById("summary-cards"),
+  performanceInsight: () => document.getElementById("performance-insight"),
   signalTableBody: () => document.getElementById("signal-table-body"),
   backtest2Y: () => document.getElementById("backtest-period-label"),
   toastContainer: () => document.getElementById("toast-container"),
@@ -236,23 +237,27 @@ function clearDashboard() {
 // ─── Summary Cards ────────────────────────────────────────────────────────────
 function renderSummaryCards(s) {
   const container = dom.summaryCards();
+  const insight = dom.performanceInsight();
   if (!container) return;
   if (!s || !Object.keys(s).length) {
     container.innerHTML = '<div class="empty-state"><div class="icon">📊</div>No backtest data yet</div>';
+    if (insight) insight.innerHTML = "";
     return;
   }
 
-  const winRateColor = s.win_rate_pct >= 50 ? "pos" : "neg";
-  const grossPnlColor = s.total_gross_pnl_pct >= 0 ? "pos" : "neg";
-  const netPnlColor = s.total_net_pnl_pct >= 0 ? "pos" : "neg";
+  const signalPnl = s.total_net_pnl_pct ?? 0;
+  const benchmarkReturn = s.benchmark_return_pct ?? 0;
+  const benchmarkCagr = s.benchmark_cagr_pct ?? 0;
+  const benchmarkDrawdown = s.benchmark_max_drawdown_pct ?? 0;
+  const profitFactor = s.profit_factor == null ? "—" : s.profit_factor.toFixed(2);
 
   const cards = [
-    { label: "Total Trades",     value: s.total_trades ?? 0,           sub: `${s.profitable_trades ?? 0} win / ${s.losing_trades ?? 0} loss`, cls: "" },
-    { label: "Win Rate",         value: `${s.win_rate_pct ?? 0}%`,      sub: "Profitable trades",         cls: winRateColor },
-    { label: "Avg P&L / Trade",  value: fmtPct(s.avg_gross_pnl_pct),    sub: "Per trade (gross)",         cls: s.avg_gross_pnl_pct >= 0 ? "pos" : "neg" },
-    { label: "Best Trade",       value: fmtPct(s.best_trade_pct),        sub: "Single trade",              cls: "pos" },
-    { label: "Worst Trade",      value: fmtPct(s.worst_trade_pct),       sub: "Single trade",              cls: "neg" },
-    { label: "Avg Hold Days",    value: `${s.avg_hold_days ?? 0}d`,      sub: "Per trade",                 cls: "" },
+    { label: "Signal P&L*",          value: fmtPct(signalPnl),             sub: "Aggregate, not a portfolio", cls: signalPnl >= 0 ? "pos" : "neg" },
+    { label: "Buy & Hold",           value: fmtPct(benchmarkReturn),        sub: "Same selected period",       cls: benchmarkReturn >= 0 ? "pos" : "neg" },
+    { label: "Buy & Hold CAGR",      value: fmtPct(benchmarkCagr),          sub: "Annualised benchmark",       cls: benchmarkCagr >= 0 ? "pos" : "neg" },
+    { label: "Benchmark Max DD",     value: fmtPct(benchmarkDrawdown),      sub: "Peak-to-trough decline",     cls: benchmarkDrawdown < 0 ? "neg" : "" },
+    { label: "Median Signal P&L",    value: fmtPct(s.median_net_pnl_pct),   sub: "More robust than average",   cls: (s.median_net_pnl_pct ?? 0) >= 0 ? "pos" : "neg" },
+    { label: "Profit Factor",        value: profitFactor,                   sub: s.profit_factor == null ? "No losing signals yet" : "Gross wins / gross losses", cls: s.profit_factor == null || s.profit_factor >= 1 ? "pos" : "neg" },
   ];
 
   container.innerHTML = cards
@@ -265,6 +270,19 @@ function renderSummaryCards(s) {
     </div>`
     )
     .join("");
+
+  if (insight) {
+    const sampleWarning = (s.total_trades ?? 0) < 20
+      ? '<span class="sample-warning">Small sample — interpret with care</span>'
+      : '<span class="sample-ok">Meaningful signal sample</span>';
+    insight.innerHTML = `
+      <span><strong>${s.total_trades ?? 0}</strong> signals · <strong>${s.win_rate_pct ?? 0}%</strong> win rate</span>
+      <span><strong>${s.active_trades ?? 0}</strong> active / ${s.closed_trades ?? 0} closed</span>
+      <span>Median hold <strong>${s.median_hold_days ?? 0}d</strong></span>
+      <span>Window: ${s.benchmark_start_date ?? "—"} → ${s.benchmark_end_date ?? "—"}</span>
+      ${sampleWarning}
+      <span class="performance-disclaimer">* Overlapping signals are not compounded into a portfolio return.</span>`;
+  }
 }
 
 // ─── Signal Table ─────────────────────────────────────────────────────────────
